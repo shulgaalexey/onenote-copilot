@@ -104,6 +104,39 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 - **Error Handling**: Implement graceful error handling and recovery
 - **Validation**: Use Pydantic models for all inputs and outputs
 
+### 🖥️ Chat CLI Development Guidelines
+- **Async Operations**: Use Python's `asyncio` for all asynchronous operations, including API calls and user input handling
+- **Rich UI Library**: Integrate the `rich` library for enhanced command-line formatting:
+  - Use `rich.panel.Panel` for bordered content sections
+  - Use `rich.markdown.Markdown` for formatted text rendering
+  - Use `rich.live.Live` for real-time updates and streaming responses
+  - Use `rich.console.Console` for consistent output formatting
+- **Chat Commands**: Implement standardized chat commands with `/` prefix:
+  - `/help` - Display available commands and usage instructions
+  - `/reset` - Clear current conversation and start fresh
+  - `/history` - Show conversation history with timestamps
+  - `/session` - Display current session information and statistics
+  - `/starters` - Show conversation starter suggestions
+  - `/quit` or `/exit` - Gracefully terminate the application
+- **Welcome Experience**: Create rich-styled welcome messages:
+  - Use headers and panels to introduce the application
+  - Display available commands and features clearly
+  - Include version information and basic usage tips
+- **Live Display**: Implement dynamic response streaming:
+  - Use `rich.live.Live` for real-time content updates
+  - Show typing indicators during API calls
+  - Stream responses character-by-character for natural feel
+- **Session Management**: Track and manage conversation state:
+  - Maintain conversation history with metadata
+  - Implement session reset functionality
+  - Provide session statistics (message count, duration, etc.)
+  - Save/load session data for persistence
+- **Error Handling**: Handle common CLI interruptions gracefully:
+  - Catch `KeyboardInterrupt` (Ctrl+C) for clean shutdown
+  - Handle `EOFError` for input stream termination
+  - Provide user-friendly error messages with recovery suggestions
+  - Implement fallback mechanisms for API failures
+
 ### 🚫 Do Not Touch
 - **Legacy Code**: Don't modify working implementations without explicit requirements
 - **Generated Files**: Don't manually edit auto-generated configuration files

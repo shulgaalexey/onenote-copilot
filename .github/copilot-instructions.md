@@ -75,6 +75,12 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 - **Mark completed tasks in `TASK.md`** immediately after finishing them.
 - Add new sub-tasks or TODOs discovered during development to `TASK.md` under a "Discovered During Work" section.
 
+
+### Deleting temporary files
+- **Delete temporary files** that you created during troubleshooting
+- **Do not delete files** that are part of the project structure or used by other components
+- **WHEN DELETED**: Add a note in `DEL.md` and `PROGRESS.md` stating what was deleted and why
+
 ### 🎨 Style & Conventions
 - **Use Python** as the primary language (3.11+).
 - **Follow PEP8**, use type hints, and format with `ruff` and `mypy`.

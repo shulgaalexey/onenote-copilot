@@ -8,7 +8,7 @@ including search responses, summaries, and error handling.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .onenote import OneNotePage, SearchResult
 
@@ -39,26 +39,37 @@ class OneNoteSearchResponse(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-    @validator('answer')
+    @field_validator('answer')
+    @classmethod
     def validate_answer(cls, v: str) -> str:
         """Ensure answer is not empty."""
         if not v or not v.strip():
             return "I couldn't find a specific answer to your question based on your OneNote content."
         return v.strip()
 
-    @validator('confidence')
-    def validate_confidence(cls, v: float, values: Dict[str, Any]) -> float:
-        """Calculate confidence based on sources if not provided."""
-        if v == 0.0 and 'sources' in values:
-            # Simple confidence calculation based on number of sources
-            source_count = len(values['sources'])
-            if source_count == 0:
-                return 0.1
-            elif source_count >= 5:
-                return 0.9
-            else:
-                return 0.3 + (source_count * 0.15)
+    @field_validator('confidence')
+    @classmethod
+    def validate_confidence(cls, v: float) -> float:
+        """Validate confidence is within bounds."""
+        if v < 0.0:
+            return 0.0
+        elif v > 1.0:
+            return 1.0
         return v
+
+    @model_validator(mode='after')
+    def calculate_confidence_from_sources(self) -> 'OneNoteSearchResponse':
+        """Calculate confidence based on sources if not explicitly set."""
+        if self.confidence == 0.0 and hasattr(self, 'sources'):
+            # Simple confidence calculation based on number of sources
+            source_count = len(self.sources)
+            if source_count == 0:
+                self.confidence = 0.0  # Keep as 0.0 for no sources
+            elif source_count >= 5:
+                self.confidence = 0.9
+            else:
+                self.confidence = 0.3 + (source_count * 0.15)
+        return self
 
     @property
     def has_sources(self) -> bool:

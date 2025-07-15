@@ -72,21 +72,30 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 - **Pattern**: Each feature needs happy path, edge case, and failure tests
 
 IMPORTANT!!!
-**When running unit tests, always wait for the entire test suite to complete before analyzing the results or proceeding. Do not interrupt or abandon test sessions prematurely, even if there is a delay in initial output.**
-- **IMPORTANT**: When running tests in the terminal, don't rush and allow tests to run and finish. Tests always take long time to run.
-- **WHEN TESTS TAKE TOO LONG**: just run them one by one.
 
-Our Python unit tests typically take between 30 and 120 seconds to run. Be patient during this period and do not assume a failure if output is delayed.
+### 📝 Test Output Tracking
+**NEW MANDATORY TESTING APPROACH**:
+- **When running tests, save the output in a `TEST_RUN.md` file** at the project root (ensure each trace line is started with the current timestamp).
+- **Overwrite this file on each test run** - it's a temporary tracking file.
+- **When tests finish, append the line `%TESTS FINISHED%`** to mark completion.
+- **Monitor this file and never proceed to the next step** until you see this marker.
+- **Maximum wait time: 5 minutes** - if tests don't complete within this timeframe, investigate or abort.
+- **Use this approach for ALL test runs** to ensure proper completion tracking.
 
-A test run is considered successful only if the terminal command returns an exit code of 0, indicating all tests passed. If the exit code is non-zero or failures are reported, initiate a thorough debugging cycle." This leverages the standardized pytest exit codes where 0 signifies success, 1 indicates failures, and other codes denote interruptions or errors.
+Example PowerShell command for test tracking:
+```powershell
+python -m pytest tests/ -v --cov=src --cov-report=term-missing 2>&1 |
+  ForEach-Object { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $_" } > TEST_RUN.md
+Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
 
-After running tests, thoroughly analyze the terminal output. Prioritize the final summary lines and the command's exit code. If the output is extensive, focus on identifying key success/failure indicators and detailed error messages, rather than parsing every line.
+Use the `TEST_RUN.md` file content to fix the failing tests if any.
 
-If tests fail (non-zero exit code), first review the traceback and failure summaries. Propose a fix and re-run tests. Only consider alternative test methods if the primary method consistently fails after multiple attempts.
+DO NOT RUN TERMINAL COMMANDS LIKE `sleep 10` or `timeout 10` to wait for tests to finish. It will not work properly.
 
----
-Same applies to running the app in the terminal. IT TAKES TIME TO START THE APP!!!
----
+
+Also when running the app in the terminal. IT TAKES TIME TO START THE APP!!!
+
 
 ### ✅ Task Completion
 - **Mark completed tasks in `TASK.md`** immediately after finishing them.

@@ -251,7 +251,7 @@ class OneNoteCLI:
         """List OneNote notebooks."""
         try:
             with self.console.status("[bold blue]Getting your OneNote notebooks...", spinner="dots"):
-                notebooks = await self.agent.search_tool.get_notebooks()
+                notebooks = await self.agent.list_notebooks()
 
             if notebooks:
                 table = self.formatter.format_notebooks(notebooks)
@@ -270,7 +270,7 @@ class OneNoteCLI:
         """Show recently modified pages."""
         try:
             with self.console.status("[bold blue]Getting recent pages...", spinner="dots"):
-                recent_pages = await self.agent.search_tool.get_recent_pages(10)
+                recent_pages = await self.agent.get_recent_pages(10)
 
             if recent_pages:
                 table = self.formatter.format_recent_pages(recent_pages)
@@ -340,6 +340,43 @@ Stay organized! 📚✨
 
         self.console.print(goodbye_panel)
 
+    async def _process_user_query(self, query: str) -> None:
+        """Process a user query through the agent."""
+        try:
+            response = await self.agent.process_query(query)
+            # Add to history
+            self._add_to_history("user", query)
+            self._add_to_history("assistant", response)
+        except Exception as e:
+            self._display_error(f"Failed to process query: {e}")
+
+    async def _handle_streaming_response(self, query: str) -> None:
+        """Handle streaming response from agent."""
+        try:
+            async for chunk in self.agent.process_query(query):
+                if chunk.type == "text":
+                    self.console.print(chunk.content, end="")
+        except Exception as e:
+            self._display_error("Streaming error", e)
+
+    def _display_error(self, message: str, exception: Exception = None) -> None:
+        """Display error message to user."""
+        if exception:
+            full_message = f"{message}: {exception}"
+        else:
+            full_message = message
+
+        error_panel = self.formatter.format_error(full_message)
+        self.console.print(error_panel)
+
+    def _add_to_history(self, role: str, content: str) -> None:
+        """Add message to conversation history."""
+        self.conversation_history.append({
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now()
+        })
+
     def get_conversation_summary(self) -> dict:
         """
         Get a summary of the current conversation.
@@ -357,6 +394,14 @@ Stay organized! 📚✨
             "session_start": self.conversation_history[0]["timestamp"] if self.conversation_history else None,
             "last_message": self.conversation_history[-1]["timestamp"] if self.conversation_history else None
         }
+
+    def _is_command(self, text: str) -> bool:
+        """Check if text is a valid command."""
+        if not text.startswith('/'):
+            return False
+
+        command = text.split()[0]
+        return command in self.commands
 
 
 async def run_cli() -> None:

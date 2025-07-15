@@ -8,7 +8,8 @@ Includes validation, serialization, and data transformation utilities.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, HttpUrl, validator
+from pydantic import (BaseModel, Field, HttpUrl, field_validator,
+                      model_validator)
 
 
 class OneNoteNotebook(BaseModel):
@@ -91,7 +92,8 @@ class OneNotePage(BaseModel):
             HttpUrl: str
         }
 
-    @validator('title', pre=True)
+    @field_validator('title', mode='before')
+    @classmethod
     def clean_title(cls, v: str) -> str:
         """Clean and normalize page title."""
         if not v:
@@ -170,12 +172,12 @@ class SearchResult(BaseModel):
             datetime: lambda v: v.isoformat()
         }
 
-    @validator('total_count', pre=True)
-    def set_total_count(cls, v: int, values: Dict[str, Any]) -> int:
+    @model_validator(mode='after')
+    def set_total_count(self) -> 'SearchResult':
         """Set total count based on pages if not provided."""
-        if v == 0 and 'pages' in values:
-            return len(values['pages'])
-        return v
+        if self.total_count == 0 and self.pages:
+            self.total_count = len(self.pages)
+        return self
 
     @property
     def has_results(self) -> bool:

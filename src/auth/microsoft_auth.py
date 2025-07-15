@@ -469,6 +469,29 @@ class MicrosoftAuthenticator:
             self._token_expires_at > datetime.now(timezone.utc)
         )
 
+    async def ensure_authenticated(self) -> bool:
+        """
+        Ensure user is authenticated with a valid token.
+
+        Returns:
+            True if authentication is successful, False otherwise
+        """
+        try:
+            if self.is_authenticated():
+                # Check if token is still valid
+                if hasattr(self, '_access_token') and self._access_token:
+                    is_valid = await self._validate_token(self._access_token)
+                    if is_valid:
+                        return True
+
+            # Need to authenticate or refresh token
+            await self.authenticate()
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to ensure authentication: {e}")
+            return False
+
     def clear_cache(self) -> None:
         """Clear all cached tokens and authentication state."""
         try:

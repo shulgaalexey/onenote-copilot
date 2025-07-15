@@ -38,30 +38,37 @@ class TestMicrosoftAuthenticator:
         mock_app.get_authorization_request_url = Mock(
             return_value="https://login.microsoftonline.com/auth?code=123"
         )
-        mock_app.acquire_token_by_authorization_code = Mock(return_value={
+
+        # Mock token response
+        token_result = {
             "access_token": "test-access-token",
             "expires_in": 3600,
             "token_type": "Bearer"
-        })
+        }
+        mock_app.acquire_token_by_authorization_code = Mock(return_value=token_result)
+        mock_app.token_cache = Mock()
+        mock_app.token_cache.has_state_changed = False
 
-        with patch('msal.PublicClientApplication', return_value=mock_app):
-            authenticator = MicrosoftAuthenticator(mock_settings)
+        authenticator = MicrosoftAuthenticator(mock_settings)
 
-            # Mock the callback server
-            with patch.object(authenticator, '_start_callback_server') as mock_server:
-                mock_server.return_value = ("http://localhost:8080", Mock())
+        # Directly set the mock app to prevent _initialize_app from creating a real one
+        authenticator.app = mock_app
 
-                # Mock browser opening at the module level
-                with patch('src.auth.microsoft_auth.webbrowser.open') as mock_browser:
-                    # Mock authorization code reception
-                    with patch.object(authenticator, '_wait_for_auth_code') as mock_wait:
-                        mock_wait.return_value = "test-auth-code"
+        # Mock the callback server
+        with patch.object(authenticator, '_start_callback_server') as mock_server:
+            mock_server.return_value = Mock()
 
-                        token = await authenticator.get_access_token()
+            # Mock browser opening at the module level
+            with patch('src.auth.microsoft_auth.webbrowser.open') as mock_browser:
+                # Mock authorization code reception
+                with patch.object(authenticator, '_wait_for_auth_code') as mock_wait:
+                    mock_wait.return_value = "test-auth-code"
 
-                        assert token == "test-access-token"
-                        assert authenticator.is_authenticated()
-                        mock_browser.assert_called_once()
+                    token = await authenticator.get_access_token()
+
+                    assert token == "test-access-token"
+                    assert authenticator.is_authenticated()
+                    mock_browser.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_authentication_failure(self, mock_settings):
@@ -76,19 +83,23 @@ class TestMicrosoftAuthenticator:
             "error": "invalid_grant",
             "error_description": "Authorization code expired"
         })
+        mock_app.token_cache = Mock()
+        mock_app.token_cache.has_state_changed = False
 
-        with patch('msal.PublicClientApplication', return_value=mock_app):
-            authenticator = MicrosoftAuthenticator(mock_settings)
+        authenticator = MicrosoftAuthenticator(mock_settings)
 
-            with patch.object(authenticator, '_start_callback_server') as mock_server:
-                mock_server.return_value = ("http://localhost:8080", Mock())
+        # Directly set the mock app to prevent _initialize_app from creating a real one
+        authenticator.app = mock_app
 
-                with patch('src.auth.microsoft_auth.webbrowser.open'):
-                    with patch.object(authenticator, '_wait_for_auth_code') as mock_wait:
-                        mock_wait.return_value = "invalid-code"
+        with patch.object(authenticator, '_start_callback_server') as mock_server:
+            mock_server.return_value = Mock()
 
-                        with pytest.raises(AuthenticationError):
-                            await authenticator.get_access_token()
+            with patch('src.auth.microsoft_auth.webbrowser.open'):
+                with patch.object(authenticator, '_wait_for_auth_code') as mock_wait:
+                    mock_wait.return_value = "invalid-code"
+
+                    with pytest.raises(AuthenticationError):
+                        await authenticator.get_access_token()
 
     @pytest.mark.asyncio
     async def test_token_caching_and_retrieval(self, mock_settings):
@@ -104,7 +115,7 @@ class TestMicrosoftAuthenticator:
             }
         }
 
-        cache_file = mock_settings.token_cache_file
+        cache_file = mock_settings.token_cache_path
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         cache_file.write_text(json.dumps(cache_content))
 
@@ -116,21 +127,28 @@ class TestMicrosoftAuthenticator:
             "expires_in": 3600,
             "token_type": "Bearer"
         })
+        mock_app.token_cache = Mock()
+        mock_app.token_cache.has_state_changed = False
 
-        with patch('msal.PublicClientApplication', return_value=mock_app):
-            authenticator = MicrosoftAuthenticator(mock_settings)
+        authenticator = MicrosoftAuthenticator(mock_settings)
 
-            token = await authenticator.get_access_token()
+        # Directly set the mock app to prevent _initialize_app from creating a real one
+        authenticator.app = mock_app
 
-            assert token == "cached-token"
-            # Should not need interactive auth
-            mock_app.get_authorization_request_url.assert_not_called()
+        token = await authenticator.get_access_token()
+
+        assert token == "cached-token"
+        # Should not need interactive auth
+        mock_app.get_authorization_request_url.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_ensure_authenticated_success(self, mock_settings):
         """Test ensure_authenticated with valid token."""
+        from datetime import datetime, timedelta, timezone
+
         authenticator = MicrosoftAuthenticator(mock_settings)
-        authenticator._current_token = "valid-token"
+        authenticator._access_token = "valid-token"
+        authenticator._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
         # Mock token validation
         with patch.object(authenticator, '_validate_token') as mock_validate:
@@ -143,18 +161,17 @@ class TestMicrosoftAuthenticator:
     async def test_ensure_authenticated_refresh(self, mock_settings):
         """Test ensure_authenticated with token refresh."""
         authenticator = MicrosoftAuthenticator(mock_settings)
-        authenticator._current_token = "expired-token"
+        # No token or expired token
+        authenticator._access_token = None
+        authenticator._token_expires_at = None
 
-        # Mock token validation and refresh
-        with patch.object(authenticator, '_validate_token') as mock_validate:
-            mock_validate.return_value = False
+        # Mock authenticate method
+        with patch.object(authenticator, 'authenticate') as mock_authenticate:
+            mock_authenticate.return_value = "new-token"
 
-            with patch.object(authenticator, 'get_access_token') as mock_get_token:
-                mock_get_token.return_value = "new-token"
-
-                result = await authenticator.ensure_authenticated()
-                assert result is True
-                mock_get_token.assert_called_once()
+            result = await authenticator.ensure_authenticated()
+            assert result is True
+            mock_authenticate.assert_called_once()
 
     def test_is_authenticated_with_no_token(self, mock_settings):
         """Test is_authenticated returns False when no token."""
@@ -163,21 +180,24 @@ class TestMicrosoftAuthenticator:
 
     def test_is_authenticated_with_valid_token(self, mock_settings):
         """Test is_authenticated returns True with valid token."""
-        authenticator = MicrosoftAuthenticator(mock_settings)
-        authenticator._current_token = "valid-token"
+        from datetime import datetime, timedelta, timezone
 
-        with patch.object(authenticator, '_validate_token') as mock_validate:
-            mock_validate.return_value = True
-            assert authenticator.is_authenticated()
+        authenticator = MicrosoftAuthenticator(mock_settings)
+        authenticator._access_token = "valid-token"
+        authenticator._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+
+        assert authenticator.is_authenticated()
 
     def test_is_authenticated_with_invalid_token(self, mock_settings):
         """Test is_authenticated returns False with invalid token."""
-        authenticator = MicrosoftAuthenticator(mock_settings)
-        authenticator._current_token = "invalid-token"
+        from datetime import datetime, timedelta, timezone
 
-        with patch.object(authenticator, '_validate_token') as mock_validate:
-            mock_validate.return_value = False
-            assert not authenticator.is_authenticated()
+        authenticator = MicrosoftAuthenticator(mock_settings)
+        authenticator._access_token = "invalid-token"
+        # Set expired time
+        authenticator._token_expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+
+        assert not authenticator.is_authenticated()
 
 
 class TestCallbackHandler:
@@ -233,61 +253,62 @@ class TestMicrosoftAuthenticatorIntegration:
     @pytest.mark.asyncio
     async def test_full_authentication_flow_mock(self, mock_settings):
         """Test complete authentication flow with mocked dependencies."""
-        authenticator = MicrosoftAuthenticator(mock_settings)
-
         # Mock all MSAL dependencies
-        with patch('msal.PublicClientApplication') as mock_msal:
-            mock_app = Mock()
-            mock_msal.return_value = mock_app
+        mock_app = Mock()
+        mock_app.get_accounts = Mock(return_value=[])
+        mock_app.acquire_token_silent = Mock(return_value=None)
+        mock_app.get_authorization_request_url = Mock(return_value="https://login.url")
+        mock_app.acquire_token_by_authorization_code = Mock(return_value={
+            "access_token": "integration-test-token",
+            "expires_in": 3600,
+            "token_type": "Bearer"
+        })
+        mock_app.token_cache = Mock()
+        mock_app.token_cache.has_state_changed = False
 
-            # No existing accounts
-            mock_app.get_accounts.return_value = []
-            mock_app.acquire_token_silent.return_value = None
+        authenticator = MicrosoftAuthenticator(mock_settings)
+        # Directly set the mock app to prevent real MSAL initialization
+        authenticator.app = mock_app
 
-            # Mock interactive flow
-            mock_app.get_authorization_request_url.return_value = "https://login.url"
-            mock_app.acquire_token_by_authorization_code.return_value = {
-                "access_token": "integration-test-token",
-                "expires_in": 3600,
-                "token_type": "Bearer"
-            }
+        # Mock server and browser interactions
+        with patch.object(authenticator, '_start_callback_server') as mock_server:
+            # Create a mock server object with shutdown method
+            mock_server_obj = Mock()
+            mock_server_obj.shutdown = Mock()
+            mock_server.return_value = mock_server_obj
 
-            # Mock server and browser interactions
-            with patch.object(authenticator, '_start_callback_server') as mock_server:
-                mock_server.return_value = ("http://localhost:8080", Mock())
+            with patch('src.auth.microsoft_auth.webbrowser.open') as mock_browser:
+                with patch.object(authenticator, '_wait_for_auth_code') as mock_wait:
+                    mock_wait.return_value = "test-code"
 
-                with patch('src.auth.microsoft_auth.webbrowser.open') as mock_browser:
-                    with patch.object(authenticator, '_wait_for_auth_code') as mock_wait:
-                        mock_wait.return_value = "test-code"
+                    # Execute authentication
+                    token = await authenticator.get_access_token()
 
-                        # Execute authentication
-                        token = await authenticator.get_access_token()
+                    # Verify results
+                    assert token == "integration-test-token"
+                    assert authenticator.is_authenticated()
 
-                        # Verify results
-                        assert token == "integration-test-token"
-                        assert authenticator.is_authenticated()
-
-                        # Verify interaction sequence
-                        mock_app.get_accounts.assert_called()
-                        mock_app.get_authorization_request_url.assert_called()
-                        mock_browser.assert_called_once()
-                        mock_app.acquire_token_by_authorization_code.assert_called()
+                    # Verify interaction sequence
+                    mock_app.get_accounts.assert_called()
+                    mock_app.get_authorization_request_url.assert_called()
+                    mock_browser.assert_called_once()
+                    mock_app.acquire_token_by_authorization_code.assert_called()
 
     def test_token_cache_file_operations(self, mock_settings):
         """Test token cache file creation and management."""
         authenticator = MicrosoftAuthenticator(mock_settings)
 
         # Cache file should not exist initially
-        assert not mock_settings.token_cache_file.exists()
+        assert not mock_settings.token_cache_path.exists()
 
-        # Mock MSAL token cache
-        with patch('msal.SerializableTokenCache') as mock_cache:
+        # Mock MSAL token cache - patch the correct import path
+        with patch('msal.token_cache.SerializableTokenCache') as mock_cache:
             mock_cache_instance = Mock()
             mock_cache.return_value = mock_cache_instance
 
             with patch('msal.PublicClientApplication'):
                 # Initialize authenticator (this should create cache structure)
-                authenticator._initialize_msal_app()
+                authenticator._initialize_app()
 
                 # Cache should be initialized
                 mock_cache.assert_called_once()
@@ -295,40 +316,44 @@ class TestMicrosoftAuthenticatorIntegration:
     @pytest.mark.asyncio
     async def test_concurrent_authentication_requests(self, mock_settings):
         """Test handling concurrent authentication requests."""
+        mock_app = Mock()
+        mock_app.get_accounts = Mock(return_value=[])
+        mock_app.acquire_token_silent = Mock(return_value=None)
+        mock_app.get_authorization_request_url = Mock(return_value="https://login.url")
+        mock_app.acquire_token_by_authorization_code = Mock(return_value={
+            "access_token": "concurrent-test-token",
+            "expires_in": 3600
+        })
+        mock_app.token_cache = Mock()
+        mock_app.token_cache.has_state_changed = False
+
         authenticator = MicrosoftAuthenticator(mock_settings)
+        # Directly set the mock app to prevent real MSAL initialization
+        authenticator.app = mock_app
 
-        with patch('msal.PublicClientApplication') as mock_msal:
-            mock_app = Mock()
-            mock_msal.return_value = mock_app
+        with patch.object(authenticator, '_start_callback_server') as mock_server:
+            # Create a mock server object with shutdown method
+            mock_server_obj = Mock()
+            mock_server_obj.shutdown = Mock()
+            mock_server.return_value = mock_server_obj
 
-            mock_app.get_accounts.return_value = []
-            mock_app.acquire_token_silent.return_value = None
-            mock_app.get_authorization_request_url.return_value = "https://login.url"
-            mock_app.acquire_token_by_authorization_code.return_value = {
-                "access_token": "concurrent-test-token",
-                "expires_in": 3600
-            }
+            with patch('src.auth.microsoft_auth.webbrowser.open'):
+                with patch.object(authenticator, '_wait_for_auth_code') as mock_wait:
+                    mock_wait.return_value = "test-code"
 
-            with patch.object(authenticator, '_start_callback_server') as mock_server:
-                mock_server.return_value = ("http://localhost:8080", Mock())
+                    # Start multiple authentication requests concurrently
+                    tasks = [
+                        authenticator.get_access_token(),
+                        authenticator.get_access_token(),
+                        authenticator.get_access_token()
+                    ]
 
-                with patch('src.auth.microsoft_auth.webbrowser.open'):
-                    with patch.object(authenticator, '_wait_for_auth_code') as mock_wait:
-                        mock_wait.return_value = "test-code"
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                        # Start multiple authentication requests concurrently
-                        tasks = [
-                            authenticator.get_access_token(),
-                            authenticator.get_access_token(),
-                            authenticator.get_access_token()
-                        ]
-
-                        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-                        # All should succeed with same token
-                        for result in results:
-                            assert not isinstance(result, Exception)
-                            assert result == "concurrent-test-token"
+                    # All should succeed with same token
+                    for result in results:
+                        assert not isinstance(result, Exception)
+                        assert result == "concurrent-test-token"
 
 
 @pytest.mark.slow
@@ -338,21 +363,20 @@ class TestAuthenticationPerformance:
     @pytest.mark.asyncio
     async def test_token_validation_performance(self, mock_settings):
         """Test token validation performance."""
+        from datetime import datetime, timedelta, timezone
+
         authenticator = MicrosoftAuthenticator(mock_settings)
-        authenticator._current_token = "test-token"
+        authenticator._access_token = "test-token"
+        authenticator._token_expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
-        # Mock fast token validation
-        with patch.object(authenticator, '_validate_token') as mock_validate:
-            mock_validate.return_value = True
+        import time
+        start_time = time.time()
 
-            import time
-            start_time = time.time()
+        # Run multiple validations
+        for _ in range(100):
+            assert authenticator.is_authenticated()
 
-            # Run multiple validations
-            for _ in range(100):
-                assert authenticator.is_authenticated()
+        end_time = time.time()
 
-            end_time = time.time()
-
-            # Should be very fast (less than 1 second for 100 validations)
-            assert end_time - start_time < 1.0
+        # Should be very fast (less than 1 second for 100 validations)
+        assert end_time - start_time < 1.0

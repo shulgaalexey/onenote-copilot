@@ -19,8 +19,10 @@ This file tracks all project tasks using a priority-based system optimized for s
 - [x] Create missing essential project files (README.md, pyproject.toml, requirements.txt, .env.example)
 - [x] Update all documentation to use pip instead of uv
 - [x] Update all references from Pydantic AI to LangGraph
+- [x] Create comprehensive PRP for OneNote Copilot CLI implementation
 
 ### P-1 (Sooner than Later)
+- [ ] Execute OneNote Copilot CLI PRP using GitHub Copilot agent mode
 - [ ] Create basic Python project structure with src/ folder
 - [ ] Set up LangGraph agent foundation
 - [ ] Configure development environment and validate all tools work

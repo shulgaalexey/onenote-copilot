@@ -121,15 +121,83 @@ class OneNoteAgent:
                 system_msg = SystemMessage(content=get_system_prompt())
                 messages = [system_msg] + messages
 
-            # Get response from LLM
+            # Check if we have tool results to process into a final response
+            tool_results = [
+                msg for msg in messages
+                if isinstance(msg, AIMessage) and isinstance(msg.content, str) and
+                any(prefix in msg.content for prefix in ["SEARCH_RESULTS:", "RECENT_PAGES:", "NOTEBOOKS:", "NO_RESULTS:", "SEARCH_ERROR:"])
+            ]
+
+            if tool_results:
+                # We have tool results, generate final response based on them
+                latest_tool_result = tool_results[-1]
+                original_query = None
+
+                # Find the original human query
+                for msg in reversed(messages):
+                    if isinstance(msg, HumanMessage):
+                        original_query = msg.content
+                        break
+
+                if latest_tool_result.content.startswith("SEARCH_RESULTS:"):
+                    # Generate response based on search results
+                    context = latest_tool_result.content.replace("SEARCH_RESULTS:\n", "")
+                    prompt = get_answer_generation_prompt(original_query or "user query", context)
+                    response_messages = [
+                        SystemMessage(content=get_system_prompt()),
+                        HumanMessage(content=prompt)
+                    ]
+                elif latest_tool_result.content.startswith("NO_RESULTS:"):
+                    # Generate response for no results
+                    prompt = get_no_results_prompt(original_query or "user query")
+                    response_messages = [
+                        SystemMessage(content=get_system_prompt()),
+                        HumanMessage(content=prompt)
+                    ]
+                elif latest_tool_result.content.startswith("RECENT_PAGES:"):
+                    # Format recent pages response
+                    pages_content = latest_tool_result.content.replace("RECENT_PAGES:\n", "")
+                    prompt = f"Based on these recent OneNote pages, provide a helpful summary for the user:\n\n{pages_content}"
+                    response_messages = [
+                        SystemMessage(content=get_system_prompt()),
+                        HumanMessage(content=prompt)
+                    ]
+                elif latest_tool_result.content.startswith("NOTEBOOKS:"):
+                    # Format notebooks response
+                    notebooks_content = latest_tool_result.content.replace("NOTEBOOKS:\n", "")
+                    prompt = f"Present this OneNote notebooks information in a helpful way:\n\n{notebooks_content}"
+                    response_messages = [
+                        SystemMessage(content=get_system_prompt()),
+                        HumanMessage(content=prompt)
+                    ]
+                else:
+                    # Error case
+                    error_content = latest_tool_result.content
+                    response = AIMessage(content=f"I encountered an issue: {error_content}")
+                    return {"messages": messages + [response]}
+
+                # Get final response from LLM
+                response = await self.llm.ainvoke(response_messages)
+                return {"messages": messages + [response]}
+
+            # No tool results yet, check if we need to call tools
+            last_message = messages[-1]
+            if isinstance(last_message, HumanMessage):
+                # Initial user query - determine if we need tools
+                user_query = last_message.content
+
+                if self._needs_tool_call(user_query):
+                    # Extract tool information and add to state
+                    tool_info = self._extract_tool_info(user_query)
+                    response = AIMessage(content=json.dumps(tool_info))
+                    return {"messages": messages + [response]}
+                else:
+                    # Direct response without tools
+                    response = await self.llm.ainvoke(messages)
+                    return {"messages": messages + [response]}
+
+            # Default case - get response from LLM
             response = await self.llm.ainvoke(messages)
-
-            # Check if the response indicates tool usage
-            if self._needs_tool_call(response.content):
-                # Extract tool information and add to state
-                tool_info = self._extract_tool_info(response.content)
-                response.content = json.dumps(tool_info)
-
             return {"messages": messages + [response]}
 
         except Exception as e:
@@ -289,19 +357,33 @@ class OneNoteAgent:
         messages = state["messages"]
         last_message = messages[-1]
 
+        # Check if we already have tool results in the conversation
+        # If we do, and the last message is from AI, we should end
+        tool_results_present = any(
+            isinstance(msg, AIMessage) and isinstance(msg.content, str) and
+            any(prefix in msg.content for prefix in ["SEARCH_RESULTS:", "RECENT_PAGES:", "NOTEBOOKS:", "NO_RESULTS:", "SEARCH_ERROR:"])
+            for msg in messages
+        )
+
         if isinstance(last_message, AIMessage) and isinstance(last_message.content, str):
+            # If we have tool results and this is a regular AI response, end the conversation
+            if tool_results_present and not last_message.content.startswith("{"):
+                return "end"
+
             try:
                 # Check if the message contains tool information
                 if last_message.content.startswith("{") and "tool" in last_message.content:
                     tool_info = json.loads(last_message.content)
                     tool_name = tool_info.get("tool", "")
 
-                    if tool_name == "search_onenote":
-                        return "search_onenote"
-                    elif tool_name == "get_recent_pages":
-                        return "get_recent_pages"
-                    elif tool_name == "get_notebooks":
-                        return "get_notebooks"
+                    # Only execute tools if we haven't already executed them
+                    if not tool_results_present:
+                        if tool_name == "search_onenote":
+                            return "search_onenote"
+                        elif tool_name == "get_recent_pages":
+                            return "get_recent_pages"
+                        elif tool_name == "get_notebooks":
+                            return "get_notebooks"
             except (json.JSONDecodeError, KeyError):
                 pass
 
@@ -392,38 +474,56 @@ class OneNoteAgent:
             # Yield status update
             yield StreamingChunk.status_chunk("Processing your query...")
 
+            # Track execution state
+            tool_executed = False
+            final_response_found = False
+
             # Process through the graph
-            final_state = None
             async for event in self.graph.astream(initial_state):
-                # Handle different event types
+                logger.debug(f"Processing event: {list(event.keys())}")
+
+                # Handle agent node events
                 if "agent" in event:
                     node_output = event["agent"]
                     if "messages" in node_output:
                         messages = node_output["messages"]
                         if messages:
                             last_message = messages[-1]
-                            if isinstance(last_message, AIMessage):
-                                # Check if this is a final response
-                                if not self._needs_tool_call(last_message.content):
-                                    # This is the final response
-                                    yield StreamingChunk.text_chunk(last_message.content, is_final=True)
-                                else:
-                                    # Tool call in progress
+                            if isinstance(last_message, AIMessage) and isinstance(last_message.content, str):
+
+                                # Check if this is a tool call instruction
+                                if last_message.content.startswith("{") and "tool" in last_message.content:
+                                    # Tool call instruction - update status
                                     yield StreamingChunk.status_chunk("Searching OneNote...")
 
+                                # Check if this is a final response after tool execution
+                                elif tool_executed and not any(prefix in last_message.content for prefix in
+                                       ["SEARCH_RESULTS:", "RECENT_PAGES:", "NOTEBOOKS:", "NO_RESULTS:", "SEARCH_ERROR:"]):
+                                    # This is the final user-facing response after tool execution
+                                    logger.debug("Final response found after tool execution")
+                                    yield StreamingChunk.text_chunk(last_message.content, is_final=True)
+                                    final_response_found = True
+                                    break  # Exit the event loop
+
+                                # Check if this is a direct response (no tools needed)
+                                elif not tool_executed and not self._needs_tool_call(last_message.content) and not last_message.content.startswith("{"):
+                                    # Direct response without tools
+                                    logger.debug("Direct response without tools")
+                                    yield StreamingChunk.text_chunk(last_message.content, is_final=True)
+                                    final_response_found = True
+                                    break  # Exit the event loop
+
+                # Handle tool execution events
                 elif any(tool in event for tool in ["search_onenote", "get_recent_pages", "get_notebooks"]):
                     # Tool execution
                     yield StreamingChunk.status_chunk("Processing results...")
+                    tool_executed = True
+                    logger.debug("Tool execution completed")
 
-                final_state = event
-
-            # If we don't have a final response yet, generate one
-            if final_state and "messages" in final_state:
-                messages = final_state["messages"]
-                if messages:
-                    last_message = messages[-1]
-                    if isinstance(last_message, AIMessage) and not last_message.content.startswith("{"):
-                        yield StreamingChunk.text_chunk(last_message.content, is_final=True)
+            # Safety check: if no final response was yielded, try to extract one
+            if not final_response_found:
+                logger.warning("No final response yielded during normal processing, attempting fallback")
+                yield StreamingChunk.error_chunk("I'm having trouble generating a response. Please try again.")
 
         except AuthenticationError:
             yield StreamingChunk.error_chunk(RESPONSE_TEMPLATES["authentication_required"])

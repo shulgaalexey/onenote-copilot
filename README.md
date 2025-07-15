@@ -101,9 +101,76 @@ Once authenticated, you can ask natural language questions about your OneNote co
 |----------|-------------|---------|
 | `OPENAI_API_KEY` | Your OpenAI API key (required) | - |
 | `AZURE_CLIENT_ID` | Custom Azure app client ID | Built-in default |
-| `OPENAI_MODEL` | OpenAI model to use | `gpt-4o-mini` |
+| `OPENAI_MODEL`    | OpenAI model to use         | `gpt-4o-mini`    |
 | `ONENOTE_DEBUG` | Enable debug logging | `false` |
 | `CLI_COLOR_ENABLED` | Enable colored output | `true` |
+
+### Obtaining Your Azure Client ID
+
+To use a custom Azure app with OneNote Copilot, you must register an application in the Azure Portal and copy its Client (Application) ID:
+
+1. Sign in to the Azure Portal: https://portal.azure.com
+2. Navigate to **Azure Active Directory** → **App registrations**
+3. Click **New registration**
+4. Enter a name (e.g., `OneNote Copilot`)
+5. Under **Redirect URI**, select **Public client (mobile & desktop)** and enter `http://localhost`
+6. Click **Register**
+7. From the **Overview** page, copy the **Application (client) ID**
+8. Set the `AZURE_CLIENT_ID` environment variable to this value
+
+**Or use the automated PowerShell script (easiest):**
+
+```powershell
+# Run the setup script with default settings
+.\setup-azure-app.ps1
+
+# Or with automatic environment variable setup
+.\setup-azure-app.ps1 -SetEnvironmentVariable
+
+# Or to persist the environment variable across sessions
+.\setup-azure-app.ps1 -PersistEnvironmentVariable
+
+# If you have multiple tenants (specify your organizational tenant)
+.\setup-azure-app.ps1 -TenantId "8da79306-87d0-41ba-b20c-f4f4d2963ff9" -SetEnvironmentVariable
+
+# Custom app name
+.\setup-azure-app.ps1 -AppName "My Custom OneNote App" -SetEnvironmentVariable
+```
+
+> **💡 Tip for Multiple Tenants**: If you see "Default Directory" errors, use your organizational tenant ID instead. Personal Microsoft accounts often can't create app registrations.
+
+**Or register manually via Azure CLI in PowerShell:**
+
+```powershell
+# Sign in to Azure
+az login
+
+# Method 1: Using properly escaped JSON (recommended)
+$AZURE_CLIENT_ID = az ad app create `
+   --display-name "OneNote Copilot" `
+   --public-client-redirect-uris "http://localhost" `
+   --required-resource-accesses '[{\"resourceAppId\":\"00000003-0000-0000-c000-000000000000\",\"resourceAccess\":[{\"id\":\"37f7f235-527c-4136-accd-4a02d197296e\",\"type\":\"Scope\"}]}]' `
+   --query appId -o tsv
+
+# Method 2: Alternative using here-string (if Method 1 fails)
+$ResourceAccess = @'
+[{"resourceAppId":"00000003-0000-0000-c000-000000000000","resourceAccess":[{"id":"37f7f235-527c-4136-accd-4a02d197296e","type":"Scope"}]}]
+'@
+
+$AZURE_CLIENT_ID = az ad app create `
+   --display-name "OneNote Copilot" `
+   --public-client-redirect-uris "http://localhost" `
+   --required-resource-accesses $ResourceAccess `
+   --query appId -o tsv
+
+Write-Host "Application (client) ID: $AZURE_CLIENT_ID"
+
+# Set environment variable for current session
+$env:AZURE_CLIENT_ID = $AZURE_CLIENT_ID
+
+# (Optional) Persist across sessions:
+#   Set-Item -Path Env:AZURE_CLIENT_ID -Value $AZURE_CLIENT_ID
+```
 
 ### Advanced Configuration
 
@@ -115,7 +182,7 @@ model = "gpt-4o-mini"
 api_key = "your-key-here"
 
 [microsoft]
-client_id = "your-custom-client-id"
+client_id = "8a58e817-6d2f-4355-96e8-82695c48c4b7"  # Your app's Client ID
 
 [cli]
 color_enabled = true
@@ -125,6 +192,20 @@ welcome_enabled = true
 [debug]
 enabled = false
 ```
+
+### Configuration Verification
+
+Run the verification script to check your setup:
+
+```powershell
+.\verify-config.ps1
+```
+
+This will verify:
+- ✅ Environment variables are set correctly
+- ✅ Azure CLI authentication status
+- ✅ Python virtual environment
+- ✅ App registration configuration
 
 ## 🏗️ Architecture
 

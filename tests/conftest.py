@@ -17,7 +17,7 @@ from pydantic import SecretStr
 
 # Test environment setup
 os.environ["OPENAI_API_KEY"] = "test-api-key"
-os.environ["AZURE_CLIENT_ID"] = "test-client-id"
+os.environ["AZURE_CLIENT_ID"] = "2d793eb5-32a9-4c85-8b9d-3b4c5c6be62e"
 
 
 @pytest.fixture
@@ -41,10 +41,11 @@ def mock_settings(temp_dir: Path):
     from src.config.settings import Settings
 
     return Settings(
-        openai_api_key=SecretStr("test-openai-key"),
-        azure_client_id="test-azure-client-id",
+        openai_api_key="test-openai-key",  # Will be converted to SecretStr
+        azure_client_id="2d793eb5-32a9-4c85-8b9d-3b4c5c6be62e",
         cache_dir=temp_dir / "cache",
         config_dir=temp_dir / "config",
+        token_cache_filename="msal_token_cache.json",  # Test expects no dot prefix
         debug_enabled=True,
         cli_color_enabled=False,
         cli_markdown_enabled=False,

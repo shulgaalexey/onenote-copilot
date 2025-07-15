@@ -13,7 +13,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage,
                                      SystemMessage)
 from langchain_openai import ChatOpenAI
-from langgraph import MessagesState, StateGraph
+from langgraph.graph import StateGraph
+from typing_extensions import TypedDict
 
 from ..auth.microsoft_auth import AuthenticationError, MicrosoftAuthenticator
 from ..config.settings import get_settings
@@ -27,6 +28,11 @@ from .prompts import (RESPONSE_TEMPLATES, get_answer_generation_prompt,
                       get_no_results_prompt, get_system_prompt)
 
 logger = logging.getLogger(__name__)
+
+
+class MessagesState(TypedDict):
+    """State for the OneNote agent conversation."""
+    messages: List[BaseMessage]
 
 
 class OneNoteAgent:

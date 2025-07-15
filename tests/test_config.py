@@ -23,13 +23,14 @@ class TestSettings:
         """Test creating settings with default values."""
         with patch.dict(os.environ, {
             "OPENAI_API_KEY": "test-key",
+            "AZURE_CLIENT_ID": "2d793eb5-32a9-4c85-8b9d-3b4c5c6be62e",
             "XDG_CONFIG_HOME": str(temp_dir / "config"),
             "XDG_CACHE_HOME": str(temp_dir / "cache")
         }):
             settings = Settings()
 
             assert settings.openai_api_key.get_secret_value() == "test-key"
-            assert settings.azure_client_id == "2d793eb5-32a9-4c85-8b9d-3b4c5c6be62e"  # Default client ID
+            assert settings.azure_client_id == "2d793eb5-32a9-4c85-8b9d-3b4c5c6be62e"  # Expected client ID
             assert settings.openai_model == "gpt-4o-mini"
             assert settings.cli_color_enabled is True
             assert settings.debug_enabled is False

@@ -9,7 +9,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from pydantic import Field, validator
+from pydantic import (ConfigDict, Field, SecretStr, computed_field,
+                      field_validator)
 from pydantic_settings import BaseSettings
 
 
@@ -22,7 +23,7 @@ class Settings(BaseSettings):
     """
 
     # OpenAI Configuration (Required for LangGraph agent)
-    openai_api_key: str = Field(
+    openai_api_key: SecretStr = Field(
         ...,
         description="OpenAI API key for LangGraph agent functionality",
         min_length=1
@@ -42,7 +43,8 @@ class Settings(BaseSettings):
     azure_client_id: str = Field(
         ...,
         description="Azure application client ID for Microsoft Graph API",
-        min_length=1
+        min_length=1,
+        alias="AZURE_CLIENT_ID"
     )
     graph_api_base_url: str = Field(
         default="https://graph.microsoft.com/v1.0",
@@ -52,12 +54,13 @@ class Settings(BaseSettings):
         default="https://login.microsoftonline.com/common",
         description="MSAL authority URL for personal Microsoft accounts"
     )
-    msal_scopes: list[str] = Field(
-        default=["Notes.Read", "User.Read"],
-        description="Required scopes for OneNote access"
+    msal_scopes_raw: str = Field(
+        default="Notes.Read,User.Read",
+        description="Required scopes for OneNote access (comma-separated)",
+        alias="MSAL_SCOPES"
     )
     msal_redirect_uri: str = Field(
-        default="http://localhost:8080/callback",
+        default="http://localhost:8080",
         description="OAuth2 redirect URI for browser authentication"
     )
 
@@ -65,6 +68,10 @@ class Settings(BaseSettings):
     cache_dir: Optional[Path] = Field(
         default=None,
         description="Custom cache directory path (defaults to user home)"
+    )
+    config_dir: Optional[Path] = Field(
+        default=None,
+        description="Custom config directory path (defaults to user home)"
     )
     token_cache_filename: str = Field(
         default=".msal_token_cache.json",
@@ -75,6 +82,11 @@ class Settings(BaseSettings):
     log_level: str = Field(
         default="INFO",
         description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+    )
+    debug_enabled: bool = Field(
+        default=False,
+        description="Enable debug mode for detailed logging and error output",
+        alias="ONENOTE_DEBUG"
     )
     max_search_results: int = Field(
         default=20,
@@ -108,7 +120,39 @@ class Settings(BaseSettings):
         description="Whether to enable markdown rendering in CLI"
     )
 
-    @validator("log_level")
+    @computed_field
+    @property
+    def msal_scopes(self) -> list[str]:
+        """Parse msal_scopes from the raw string value."""
+        return [scope.strip() for scope in self.msal_scopes_raw.split(",") if scope.strip()]
+
+    @computed_field
+    @property
+    def token_cache_file(self) -> Path:
+        """Get the full path to the MSAL token cache file."""
+        return self.token_cache_path
+
+    @computed_field
+    @property
+    def graph_api_url(self) -> str:
+        """Get the Microsoft Graph API base URL (alias for graph_api_base_url)."""
+        return self.graph_api_base_url
+
+    @computed_field
+    @property
+    def search_url(self) -> str:
+        """Get the OneNote search API endpoint URL."""
+        return f"{self.graph_api_base_url}/me/onenote/pages"
+
+    @computed_field
+    @property
+    def graph_api_scopes(self) -> list[str]:
+        """Get the Microsoft Graph API scopes as full URLs."""
+        base_url = "https://graph.microsoft.com"
+        return [f"{base_url}/{scope}" for scope in ["Notes.Read", "Notes.Read.All"]]
+
+    @field_validator("log_level")
+    @classmethod
     def validate_log_level(cls, v: str) -> str:
         """Validate log level is one of the standard logging levels."""
         valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
@@ -116,12 +160,57 @@ class Settings(BaseSettings):
             raise ValueError(f"log_level must be one of: {', '.join(valid_levels)}")
         return v.upper()
 
-    @validator("cache_dir", pre=True)
+    @field_validator("debug_enabled", mode="before")
+    @classmethod
+    def validate_debug_enabled(cls, v) -> bool:
+        """Parse boolean from environment variable."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "yes", "1", "on", "enable", "enabled")
+        return bool(v)
+
+    @field_validator("cli_welcome_enabled", mode="before")
+    @classmethod
+    def validate_cli_welcome_enabled(cls, v) -> bool:
+        """Parse boolean from environment variable."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "yes", "1", "on", "enable", "enabled")
+        return bool(v)
+
+    @field_validator("cli_color_enabled", mode="before")
+    @classmethod
+    def validate_cli_color_enabled(cls, v) -> bool:
+        """Parse boolean from environment variable."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "yes", "1", "on", "enable", "enabled")
+        return bool(v)
+
+    @field_validator("cli_markdown_enabled", mode="before")
+    @classmethod
+    def validate_cli_markdown_enabled(cls, v) -> bool:
+        """Parse boolean from environment variable."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "yes", "1", "on", "enable", "enabled")
+        return bool(v)
+
+    @field_validator("cache_dir", mode="before")
+    @classmethod
     def validate_cache_dir(cls, v: Optional[str]) -> Optional[Path]:
         """Convert cache_dir string to Path and validate it exists or can be created."""
         if v is None:
-            # Default to user home directory
-            return Path.home() / ".onenote_copilot"
+            # Default to user home directory, handle test environments gracefully
+            try:
+                return Path.home() / ".onenote_copilot"
+            except RuntimeError:
+                # Fallback for test environments where home directory isn't available
+                return Path.cwd() / ".onenote_copilot"
 
         cache_path = Path(v)
 
@@ -133,16 +222,44 @@ class Settings(BaseSettings):
 
         return cache_path
 
+    @field_validator("config_dir", mode="before")
+    @classmethod
+    def validate_config_dir(cls, v: Optional[str]) -> Optional[Path]:
+        """Convert config_dir string to Path and validate it exists or can be created."""
+        if v is None:
+            # Default to user home directory, handle test environments gracefully
+            try:
+                return Path.home() / ".onenote_copilot"
+            except RuntimeError:
+                # Fallback for test environments where home directory isn't available
+                return Path.cwd() / ".onenote_copilot"
+
+        config_path = Path(v)
+
+        # Create directory if it doesn't exist
+        try:
+            config_path.mkdir(parents=True, exist_ok=True)
+        except (OSError, PermissionError) as e:
+            raise ValueError(f"Cannot create config directory {config_path}: {e}")
+
+        return config_path
+
     @property
     def token_cache_path(self) -> Path:
         """Get the full path to the MSAL token cache file."""
-        cache_dir = self.cache_dir or Path.home() / ".onenote_copilot"
+        try:
+            cache_dir = self.cache_dir or (Path.home() / ".onenote_copilot")
+        except RuntimeError:
+            cache_dir = self.cache_dir or (Path.cwd() / ".onenote_copilot")
         return cache_dir / self.token_cache_filename
 
     @property
     def credentials_dir(self) -> Path:
         """Get the credentials directory path."""
-        cache_dir = self.cache_dir or Path.home() / ".onenote_copilot"
+        try:
+            cache_dir = self.cache_dir or (Path.home() / ".onenote_copilot")
+        except RuntimeError:
+            cache_dir = self.cache_dir or (Path.cwd() / ".onenote_copilot")
         creds_dir = cache_dir / "credentials"
         creds_dir.mkdir(exist_ok=True)
         return creds_dir
@@ -161,30 +278,37 @@ class Settings(BaseSettings):
             path = '/' + path
         return f"{self.graph_api_base_url}{path}"
 
-    class Config:
-        """Pydantic configuration."""
-        env_file = ".env.local"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        # Allow environment variables to override .env file
-        env_prefix = ""
+    model_config = ConfigDict(
+        env_file=[".env.local", ".env"],  # Try .env.local first, then fallback to .env
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        env_prefix="",
+        extra="allow",  # Allow extra fields for test compatibility
+        env_nested_delimiter=None  # Disable JSON parsing for environment variables
+    )
 
 
 # Global settings instance
-settings = Settings()
+_settings: Optional[Settings] = None
 
 
-def get_settings() -> Settings:
+def get_settings(force_reload: bool = False) -> Settings:
     """
     Get the global settings instance.
 
     This function provides a way to access settings throughout the application
     while allowing for dependency injection in tests.
 
+    Args:
+        force_reload: If True, force reload settings from environment
+
     Returns:
         Global settings instance
     """
-    return settings
+    global _settings
+    if _settings is None or force_reload:
+        _settings = Settings()
+    return _settings
 
 
 def validate_environment() -> None:
@@ -199,19 +323,21 @@ def validate_environment() -> None:
         settings = get_settings()
 
         # Additional validation checks
-        if not settings.openai_api_key.startswith(('sk-', 'sk-proj-')):
+        if not settings.openai_api_key.get_secret_value().startswith(('sk-', 'sk-proj-')):
             raise ValueError("OpenAI API key appears to be invalid (should start with 'sk-')")
 
         if len(settings.azure_client_id) != 36:
             raise ValueError("Azure client ID appears to be invalid (should be 36 characters)")
 
         # Ensure cache directory is writable
-        test_file = settings.cache_dir / ".write_test"
+        cache_dir = settings.cache_dir
         try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            test_file = cache_dir / ".write_test"
             test_file.write_text("test")
             test_file.unlink()
         except (OSError, PermissionError):
-            raise ValueError(f"Cache directory is not writable: {settings.cache_dir}")
+            raise ValueError(f"Cache directory is not writable: {cache_dir}")
 
     except Exception as e:
         raise ValueError(f"Environment validation failed: {e}")

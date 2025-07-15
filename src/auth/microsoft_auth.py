@@ -10,7 +10,7 @@ import asyncio
 import json
 import logging
 import webbrowser
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from threading import Thread
@@ -43,30 +43,29 @@ class CallbackHandler(BaseHTTPRequestHandler):
 
             # Send success response
             self.send_response(200)
-            self.send_header("Content-type", "text/html")
+            self.send_header("Content-type", "text/html; charset=utf-8")
             self.end_headers()
 
-            success_html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>OneNote Copilot - Authentication Success</title>
-                <style>
-                    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-                    .success { color: #28a745; font-size: 24px; margin-bottom: 20px; }
-                    .instruction { color: #666; font-size: 16px; }
-                </style>
-            </head>
-            <body>
-                <div class="success">✅ Authentication Successful!</div>
-                <div class="instruction">
-                    You can now close this browser window and return to the OneNote Copilot CLI.
-                </div>
-            </body>
-            </html>
-            """
+            success_html = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>OneNote Copilot - Authentication Success</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+        .success { color: #28a745; font-size: 24px; margin-bottom: 20px; }
+        .instruction { color: #666; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="success">✅ Authentication Successful!</div>
+    <div class="instruction">
+        You can now close this browser window and return to the OneNote Copilot CLI.
+    </div>
+</body>
+</html>"""
 
-            self.wfile.write(success_html.encode())
+            self.wfile.write(success_html.encode('utf-8'))
         elif "error" in query_params:
             error = query_params.get("error", ["unknown"])[0]
             error_description = query_params.get("error_description", [""])[0]
@@ -76,30 +75,29 @@ class CallbackHandler(BaseHTTPRequestHandler):
 
             # Send error response
             self.send_response(400)
-            self.send_header("Content-type", "text/html")
+            self.send_header("Content-type", "text/html; charset=utf-8")
             self.end_headers()
 
-            error_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>OneNote Copilot - Authentication Error</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
-                    .error {{ color: #dc3545; font-size: 24px; margin-bottom: 20px; }}
-                    .details {{ color: #666; font-size: 14px; }}
-                </style>
-            </head>
-            <body>
-                <div class="error">❌ Authentication Failed</div>
-                <div class="details">Error: {error}</div>
-                <div class="details">{error_description}</div>
-                <div class="details">Please close this window and try again in the CLI.</div>
-            </body>
-            </html>
-            """
+            error_html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>OneNote Copilot - Authentication Error</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; }}
+        .error {{ color: #dc3545; font-size: 24px; margin-bottom: 20px; }}
+        .details {{ color: #666; font-size: 14px; }}
+    </style>
+</head>
+<body>
+    <div class="error">❌ Authentication Failed</div>
+    <div class="details">Error: {error}</div>
+    <div class="details">{error_description}</div>
+    <div class="details">Please close this window and try again in the CLI.</div>
+</body>
+</html>"""
 
-            self.wfile.write(error_html.encode())
+            self.wfile.write(error_html.encode('utf-8'))
 
     def log_message(self, format: str, *args) -> None:
         """Suppress default HTTP server logging."""
@@ -123,17 +121,23 @@ class MicrosoftAuthenticator:
         """
         self.settings = settings or get_settings()
 
-        # Initialize MSAL PublicClientApplication
-        self.app = PublicClientApplication(
-            client_id=self.settings.azure_client_id,
-            authority=self.settings.msal_authority,
-            token_cache=self._get_token_cache()
-        )
+        # Initialize MSAL PublicClientApplication (set to None initially for tests)
+        self.app: Optional[PublicClientApplication] = None
+        self.http_server: Optional[HTTPServer] = None
 
         # Authentication state
         self._current_account: Optional[Dict[str, Any]] = None
         self._access_token: Optional[str] = None
         self._token_expires_at: Optional[datetime] = None
+
+    def _initialize_app(self) -> None:
+        """Initialize MSAL PublicClientApplication when needed."""
+        if self.app is None:
+            self.app = PublicClientApplication(
+                client_id=self.settings.azure_client_id,
+                authority=self.settings.msal_authority,
+                token_cache=self._get_token_cache()
+            )
 
     def _get_token_cache(self):
         """Get or create MSAL token cache."""
@@ -154,7 +158,7 @@ class MicrosoftAuthenticator:
 
     def _save_token_cache(self) -> None:
         """Save token cache to disk."""
-        if self.app.token_cache.has_state_changed:
+        if self.app and self.app.token_cache.has_state_changed:
             try:
                 cache_file = self.settings.token_cache_path
                 cache_file.parent.mkdir(parents=True, exist_ok=True)
@@ -166,6 +170,18 @@ class MicrosoftAuthenticator:
             except Exception as e:
                 logger.error(f"Failed to save token cache: {e}")
 
+    async def get_access_token(self) -> str:
+        """
+        Get access token (alias for authenticate for test compatibility).
+
+        Returns:
+            Valid access token for Microsoft Graph API
+
+        Raises:
+            AuthenticationError: If authentication fails
+        """
+        return await self.authenticate()
+
     async def authenticate(self) -> str:
         """
         Authenticate user and get access token.
@@ -176,6 +192,8 @@ class MicrosoftAuthenticator:
         Raises:
             AuthenticationError: If authentication fails
         """
+        self._initialize_app()
+
         try:
             # Try silent authentication first (using cached tokens)
             token = await self._try_silent_authentication()
@@ -197,6 +215,18 @@ class MicrosoftAuthenticator:
             logger.error(f"Authentication failed: {e}")
             raise AuthenticationError(f"Authentication failed: {e}")
 
+    async def _validate_token(self, token: str) -> bool:
+        """
+        Internal token validation method for testing.
+
+        Args:
+            token: Access token to validate
+
+        Returns:
+            True if token is valid, False otherwise
+        """
+        return await self.validate_token(token)
+
     async def _try_silent_authentication(self) -> Optional[str]:
         """
         Try to authenticate silently using cached tokens.
@@ -204,6 +234,9 @@ class MicrosoftAuthenticator:
         Returns:
             Access token if successful, None otherwise
         """
+        if not self.app:
+            return None
+
         try:
             accounts = self.app.get_accounts()
             if not accounts:
@@ -240,6 +273,9 @@ class MicrosoftAuthenticator:
         Returns:
             Access token if successful, None otherwise
         """
+        if not self.app:
+            return None
+
         try:
             # Start local callback server
             auth_code_container: Dict[str, str] = {}
@@ -340,10 +376,9 @@ class MicrosoftAuthenticator:
         self._access_token = token_result["access_token"]
         self._current_account = account
 
-        # Calculate token expiration
+        # Calculate token expiration using timedelta
         expires_in = token_result.get("expires_in", 3600)  # Default 1 hour
-        self._token_expires_at = datetime.now(timezone.utc).replace(microsecond=0)
-        self._token_expires_at = self._token_expires_at.replace(second=self._token_expires_at.second + expires_in)
+        self._token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
     async def get_valid_token(self) -> str:
         """
@@ -357,9 +392,8 @@ class MicrosoftAuthenticator:
         """
         # Check if we have a valid token
         if self._access_token and self._token_expires_at:
-            # Add 5-minute buffer before expiration
-            buffer_time = datetime.now(timezone.utc).replace(microsecond=0)
-            buffer_time = buffer_time.replace(minute=buffer_time.minute + 5)
+            # Add 5-minute buffer before expiration using timedelta
+            buffer_time = datetime.now(timezone.utc) + timedelta(minutes=5)
 
             if self._token_expires_at > buffer_time:
                 return self._access_token
@@ -426,6 +460,9 @@ class MicrosoftAuthenticator:
         Returns:
             True if authenticated with valid token, False otherwise
         """
+        if not hasattr(self, '_access_token') or not hasattr(self, '_token_expires_at'):
+            return False
+
         return (
             self._access_token is not None and
             self._token_expires_at is not None and
@@ -456,7 +493,10 @@ class MicrosoftAuthenticator:
 
 class AuthenticationError(Exception):
     """Exception raised when authentication fails."""
-    pass
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message)
+        self.details = details or {}
 
 
 async def get_authenticated_token() -> str:

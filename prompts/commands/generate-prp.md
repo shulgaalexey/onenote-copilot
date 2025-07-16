@@ -45,8 +45,9 @@ Using PRPs/templates/prp_base.md as template:
 # Syntax/Style (Windows PowerShell)
 ruff check --fix; mypy .
 
-# Unit Tests (Windows PowerShell)
-python -m pytest tests/ -v
+# Unit Tests (Windows PowerShell) - MANDATORY TEST_RUN.md approach
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+# CRITICAL: Must wait for "%TESTS FINISHED%" marker before proceeding
 ```
 
 *** CRITICAL AFTER YOU ARE DONE RESEARCHING AND EXPLORING THE CODEBASE BEFORE YOU START WRITING THE PRP ***

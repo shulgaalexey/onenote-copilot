@@ -540,9 +540,17 @@ def test_cli_formatting():
 ```
 
 ```powershell
-# Run and iterate until passing (Windows PowerShell):
-python -m pytest tests/ -v --cov=src --cov-report=term-missing
-# Target: 80%+ coverage. If failing, read errors carefully and fix issues.
+# 🚨 MANDATORY: Use TEST_RUN.md approach for all test execution
+# This prevents Copilot Agent from jumping to next commands prematurely
+
+# Required test command with completion tracking
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+
+# CRITICAL: Wait for "%TESTS FINISHED%" marker in TEST_RUN.md before proceeding
+# Monitor TEST_RUN.md contents to track progress
+# Maximum wait time: 5 minutes
+
+# Target: 80%+ coverage. If failing, check TEST_RUN.md for detailed error output
 ```
 
 ### Level 3: Integration Tests

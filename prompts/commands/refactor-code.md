@@ -22,6 +22,11 @@ Treat large file refactoring like surgery on a live patient – one wrong cut ki
     - Start with private methods (safest)
     - Progress to classes, then interfaces
     - Use Strangler Fig for high-coupling areas
+    - **MANDATORY**: Use TEST_RUN.md approach for all test validation:
+      ```powershell
+      python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+      ```
+    - Wait for `%TESTS FINISHED%` marker before proceeding to next refactor step
 
 ---
 

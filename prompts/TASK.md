@@ -148,3 +148,35 @@ This task file is integrated with:
 - Move completed tasks to "Completed Tasks ✓" section immediately
 - Add new discoveries to "Discovered During Work" section
 - Keep daily focus areas updated based on current priorities
+
+## Testing Workflow with TEST_RUN.md
+
+### 🚨 MANDATORY Test Execution Pattern
+**ALL test execution must follow this approach to prevent Copilot Agent from jumping to next commands prematurely:**
+
+#### Required Command
+```powershell
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+#### Essential Testing Rules
+1. **NEVER run tests without TEST_RUN.md redirection**
+2. **ALWAYS wait for `%TESTS FINISHED%` marker** before analyzing results or proceeding
+3. **MONITOR TEST_RUN.md contents** to track real-time progress
+4. **MAXIMUM wait: 5 minutes** - if tests don't complete, investigate but don't abandon
+5. **USE SAME PATTERN for all test types** (unit, integration, coverage)
+
+#### Why This Approach Is Critical
+- **Prevents premature actions**: Agent won't move to next step while tests are still running
+- **Provides visibility**: Can see test progress as it happens
+- **Ensures completion**: Clear marker indicates when tests have finished
+- **Debugging aid**: Complete test output captured for failure analysis
+
+#### Testing Validation Checkpoints
+- Before any commit or pull request
+- After implementing new features
+- When fixing bugs or issues
+- During PRP validation phases
+- After dependency updates
+
+## Project Workflow Integration

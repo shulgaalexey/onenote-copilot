@@ -44,8 +44,9 @@ pip freeze > requirements.txt               # Update requirements after adding p
 
 # Quality Checks
 ruff check --fix; mypy .                    # Lint and type check
-python -m pytest tests/ -v                  # Run tests
-python -m pytest tests/ --cov=src --cov-report=term-missing  # Tests with coverage
+# Development
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Run tests with TEST_RUN.md tracking
+python -m pytest tests/ --cov=src --cov-report=term-missing --cov-report=html > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Tests with coverage and HTML report
 
 # Application
 python -m src.main                          # Run main application (future)
@@ -73,7 +74,7 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 
 
 ### 📝 Test Output Tracking
-**NEW MANDATORY TESTING APPROACH**:
+**🚨 MANDATORY TESTING APPROACH - NEVER SKIP THIS**:
 - **When running tests, save the output in a `TEST_RUN.md` file** at the project root (ensure each trace line is started with the current timestamp).
 - **Overwrite this file on each test run** - it's a temporary tracking file.
 - **When tests finish, append the line `%TESTS FINISHED%`** to mark completion.
@@ -83,16 +84,16 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 
 Example PowerShell command for test tracking:
 ```powershell
-`python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"`
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
 ```
 
+**WHY THIS IS CRITICAL**: This prevents Copilot Agent from jumping to the next command before tests finish. Tests often take time to start up, and the Agent must be patient and wait for the completion marker rather than abandoning the test session.
 
-Use the `TEST_RUN.md` file content to fix the failing tests if any.
+Use the `TEST_RUN.md` file content to fix failing tests if any.
 
-DO NOT RUN TERMINAL COMMANDS LIKE `sleep 10` or `timeout 10` to wait for tests to finish. It will not work properly.
+**DO NOT RUN TERMINAL COMMANDS LIKE `sleep 10` or `timeout 10` to wait for tests to finish. It will not work properly.**
 
-
-Also when running the app in the terminal. IT TAKES TIME TO START THE APP!!!
+Also when running the app in the terminal. **IT TAKES TIME TO START THE APP!!!**
 
 
 ### ✅ Task Completion
@@ -185,7 +186,7 @@ Before any commit or pull request:
 # Must pass all of these checks
 ruff check --fix                            # Code formatting and linting
 mypy .                                       # Type checking
-python -m pytest tests/ -v --cov=src --cov-report=term-missing  # Testing with coverage
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Testing with coverage using TEST_RUN.md approach
 ```
 
 ### 📚 Documentation & Explainability
@@ -197,7 +198,7 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing  # Testing with c
 ### 🔧 Troubleshooting
 - **Virtual Environment Issues**: Ensure PowerShell execution policy allows script execution. Use `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` if needed
 - **Package Management Issues**: Use `pip` for reliable dependency management. Clear pip cache with `pip cache purge` if installation issues occur
-- **Testing Issues**: Run tests with `-v` flag for verbose output. Use `--pdb` flag to drop into debugger on test failures
+- **Testing Issues**: Use TEST_RUN.md approach for verbose output: `python -m pytest tests/ -v > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"`. Use `--pdb` flag to drop into debugger on test failures
 
 ### 🧠 AI Behavior Rules
 - **Never assume missing context. Ask questions if uncertain.**

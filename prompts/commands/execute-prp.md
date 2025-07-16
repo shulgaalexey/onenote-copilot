@@ -25,9 +25,13 @@ Implement a feature using using the PRP file.
    - Implement all the code following Windows/PowerShell best practices
 
 4. **Validate**
-   - Run each validation command
-   - Fix any failures
-   - Re-run until all pass
+   - **MANDATORY**: Use TEST_RUN.md approach for all test execution
+   - Run validation command: `python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"`
+   - **WAIT** for `%TESTS FINISHED%` marker before proceeding
+   - Monitor `TEST_RUN.md` contents to track test progress
+   - Fix any failures shown in TEST_RUN.md
+   - Re-run tests using same TEST_RUN.md approach until all pass
+   - Never skip the TEST_RUN.md pattern - it prevents premature command execution
 
 5. **Complete**
    - Ensure all checklist items done

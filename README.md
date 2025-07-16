@@ -234,10 +234,30 @@ OneNote Copilot is built with a modern, extensible architecture:
 
 ## 🧪 Testing
 
-Run the test suite:
+### 🚨 MANDATORY: TEST_RUN.md Approach
+**All test execution must use this pattern to ensure proper completion tracking:**
 
+```powershell
+# Required test command with output redirection
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+#### Why Use TEST_RUN.md?
+- **Prevents premature actions**: Ensures tests complete before next steps
+- **Progress tracking**: Monitor test execution in real-time
+- **Completion verification**: Clear `%TESTS FINISHED%` marker indicates completion
+- **Debugging support**: Full test output captured for failure analysis
+
+#### Testing Workflow
+1. **Execute**: Run the command above to start tests
+2. **Monitor**: Check `TEST_RUN.md` contents to see progress
+3. **Wait**: Look for `%TESTS FINISHED%` marker at file end
+4. **Analyze**: Review results only after completion marker appears
+5. **Fix**: Address any failures and re-run using same pattern
+
+### Alternative Test Commands
 ```bash
-# Run all tests
+# Run all tests (legacy - use TEST_RUN.md approach instead)
 python run_tests.py all
 
 # Run only unit tests
@@ -249,6 +269,13 @@ python run_tests.py coverage
 # Run linting and type checking
 python run_tests.py check
 ```
+
+### Development Testing Best Practices
+- **Never skip TEST_RUN.md pattern** for pytest execution
+- **Always wait for completion marker** before proceeding
+- **Monitor file contents** to track progress
+- **Maximum wait time**: 5 minutes before investigating issues
+- **Use same pattern** for all test types (unit, integration, coverage)
 
 ## 🔒 Security & Privacy
 

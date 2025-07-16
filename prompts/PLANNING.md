@@ -85,7 +85,7 @@ onenote-copilot/
 .\.venv\Scripts\Activate.ps1
 
 # Development
-python -m pytest tests/ -v                 # Run tests
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"                 # Run tests with TEST_RUN.md tracking
 ruff check --fix; mypy .                   # Lint and type check
 python -m src.main                          # Run main application
 
@@ -106,6 +106,43 @@ pip freeze > requirements.txt              # Update requirements file
   - Edge case test
   - Failure case test
 
+### 🚨 MANDATORY: TEST_RUN.md Testing Approach
+**ALL test execution MUST follow this pattern to prevent premature command execution:**
+
+#### Required Test Command
+```powershell
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+#### Critical Rules
+1. **ALWAYS redirect pytest output to `TEST_RUN.md`** - never run tests without this redirection
+2. **WAIT for `%TESTS FINISHED%` marker** - this indicates test completion
+3. **NEVER proceed to next command** until you see the completion marker
+4. **Monitor TEST_RUN.md contents** to track progress in real-time
+5. **Maximum wait time: 5 minutes** - investigate if tests take longer
+
+#### Why This Approach Is Essential
+- **Prevents premature actions**: Copilot Agent won't jump to next step while tests are running
+- **Provides visibility**: Real-time test progress monitoring
+- **Ensures completion**: Clear signal when all tests have finished
+- **Debugging support**: Full test output captured for failure analysis
+
+#### Test Execution Workflow
+1. **Execute command**: Run the exact PowerShell command above
+2. **Monitor file**: Periodically check `TEST_RUN.md` contents for progress
+3. **Wait for marker**: Look for `%TESTS FINISHED%` at file end
+4. **Analyze results**: Review test outcomes only after seeing completion marker
+5. **Take action**: Fix failures or proceed based on complete results
+
+#### Troubleshooting Long-Running Tests
+```powershell
+# Check current test progress
+Get-Content TEST_RUN.md -Tail 10
+
+# Run individual test files if needed
+python -m pytest tests/test_specific.py -v > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
 ### Code Quality
 - **Formatting**: Use `black` for code formatting
 - **Linting**: `ruff` for style and error checking
@@ -119,8 +156,8 @@ All code must pass these checks before merge:
 ruff check --fix
 mypy .
 
-# Tests
-python -m pytest tests/ -v --cov=src --cov-report=term-missing
+# Tests - MANDATORY TEST_RUN.md approach
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
 
 # Integration (if applicable)
 # Manual testing of main workflows

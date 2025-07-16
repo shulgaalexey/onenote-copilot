@@ -20,6 +20,15 @@ from ..models.onenote import OneNotePage, SearchResult
 from ..models.responses import OneNoteCommandResponse, OneNoteSearchResponse
 
 
+def create_progress_spinner(description: str = "Processing...") -> Progress:
+    """Create a progress spinner for long-running operations."""
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        transient=True,
+    )
+
+
 class CLIFormatter:
     """
     Rich-based formatter for OneNote Copilot CLI output.
@@ -495,19 +504,194 @@ Search for Python best practices
             padding=(1, 2)
         )
 
+    def format_page_details(self, page: OneNotePage) -> Panel:
+        """
+        Format detailed information about a single page.
 
-def create_progress_spinner(description: str = "Working...") -> Progress:
-    """
-    Create a Rich progress spinner.
+        Args:
+            page: OneNote page to format
 
-    Args:
-        description: Description text for the spinner
+        Returns:
+            Rich Panel with page details
+        """
+        details = f"""**Title:** {page.title}
+**Created:** {page.created_date_time.strftime('%Y-%m-%d %H:%M')}
+**Modified:** {page.last_modified_date_time.strftime('%Y-%m-%d %H:%M')}
+**Content Preview:** {page.short_content[:200]}..."""
 
-    Returns:
-        Rich Progress instance
-    """
-    return Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        transient=True
-    )
+        if self.enable_markdown:
+            content = Markdown(details)
+        else:
+            content = Text(details)
+
+        return Panel(
+            content,
+            title="[bold blue]Page Details[/bold blue]",
+            border_style="blue",
+            padding=(1, 2)
+        )
+
+    def format_warning(self, warning: str, title: str = "Warning") -> Panel:
+        """
+        Format a warning message.
+
+        Args:
+            warning: Warning message text
+            title: Warning title
+
+        Returns:
+            Rich Panel with warning message
+        """
+        return Panel(
+            Text(warning),
+            title=f"[bold {self.colors['warning']}]{title}[/bold {self.colors['warning']}]",
+            border_style=self.colors["warning"],
+            padding=(1, 2)
+        )
+
+    def format_info(self, info: str, title: str = "Info") -> Panel:
+        """
+        Format an info message.
+
+        Args:
+            info: Info message text
+            title: Info title
+
+        Returns:
+            Rich Panel with info message
+        """
+        return Panel(
+            Text(info),
+            title=f"[bold {self.colors['info']}]{title}[/bold {self.colors['info']}]",
+            border_style=self.colors["info"],
+            padding=(1, 2)
+        )
+
+    def create_progress(self, description: str = "Processing...") -> Progress:
+        """
+        Create a Rich progress instance.
+
+        Args:
+            description: Description for the progress indicator
+
+        Returns:
+            Rich Progress instance
+        """
+        return Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            transient=True
+        )
+
+    def format_pages_table(self, pages: List[OneNotePage]) -> Table:
+        """
+        Format a list of pages as a table.
+
+        Args:
+            pages: List of OneNote pages
+
+        Returns:
+            Rich Table with page information
+        """
+        table = Table(
+            title="OneNote Pages",
+            show_header=True,
+            header_style="bold blue"
+        )
+
+        table.add_column("Title", style="cyan", no_wrap=False)
+        table.add_column("Modified", style="yellow", width=20)
+        table.add_column("Notebook", style="green", width=15)
+
+        for page in pages[:10]:  # Limit to 10 pages
+            notebook_name = page.get_notebook_name() or "Unknown"
+            modified = page.last_modified_date_time.strftime('%Y-%m-%d %H:%M')
+            table.add_row(page.title, modified, notebook_name)
+
+        return table
+
+    def format_notebooks_list(self, notebooks: List[Dict[str, Any]]) -> Table:
+        """
+        Format a list of notebooks as a table.
+
+        Args:
+            notebooks: List of notebook data
+
+        Returns:
+            Rich Table with notebook information
+        """
+        table = Table(
+            title="OneNote Notebooks",
+            show_header=True,
+            header_style="bold blue"
+        )
+
+        table.add_column("Name", style="cyan", no_wrap=False)
+        table.add_column("Sections", style="yellow", width=10)
+        table.add_column("Created", style="green", width=20)
+
+        for notebook in notebooks[:10]:  # Limit to 10 notebooks
+            name = notebook.get('displayName', 'Unknown')
+            sections = str(len(notebook.get('sections', [])))
+            created = notebook.get('createdDateTime', 'Unknown')
+            if created != 'Unknown':
+                try:
+                    created_dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
+                    created = created_dt.strftime('%Y-%m-%d')
+                except:
+                    created = 'Unknown'
+            table.add_row(name, sections, created)
+
+        return table
+
+    def format_streaming_chunk(self, chunk_text: str) -> Text:
+        """
+        Format a streaming text chunk.
+
+        Args:
+            chunk_text: Text chunk to format
+
+        Returns:
+            Rich Text instance
+        """
+        return Text(chunk_text, style=self.colors["primary"])
+
+    def format_typing_indicator(self, message: str = "Thinking...") -> Text:
+        """
+        Format a typing indicator.
+
+        Args:
+            message: Typing indicator message
+
+        Returns:
+            Rich Text instance with animated dots
+        """
+        return Text(f"🤔 {message}", style=self.colors["muted"])
+
+    def truncate_text(self, text: str, max_length: int = 100) -> str:
+        """
+        Truncate text to specified length.
+
+        Args:
+            text: Text to truncate
+            max_length: Maximum length
+
+        Returns:
+            Truncated text with ellipsis if needed
+        """
+        if len(text) <= max_length:
+            return text
+        return text[:max_length-3] + "..."
+
+    def format_datetime(self, dt: datetime, format_str: str = "%Y-%m-%d %H:%M") -> str:
+        """
+        Format a datetime object.
+
+        Args:
+            dt: Datetime to format
+            format_str: Format string
+
+        Returns:
+            Formatted datetime string
+        """
+        return dt.strftime(format_str)

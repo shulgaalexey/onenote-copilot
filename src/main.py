@@ -35,7 +35,8 @@ app = typer.Typer(
     name="onenote-copilot",
     help="🤖 AI-powered natural language search for your OneNote content",
     add_completion=False,
-    rich_markup_mode="rich"
+    rich_markup_mode="rich",
+    no_args_is_help=False
 )
 
 # Console for output
@@ -198,8 +199,9 @@ def check_dependencies() -> bool:
     return True
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     auth_only: bool = typer.Option(
         False,
         "--auth-only",
@@ -256,34 +258,36 @@ def main(
         show_system_info()
         return
 
-    # Check dependencies
-    if not check_dependencies():
-        raise typer.Exit(1)
-
-    # Handle auth-only mode
-    if auth_only:
-        success = asyncio.run(authenticate_only())
-        if not success:
+    # If no command was invoked, run the main chat interface
+    if ctx.invoked_subcommand is None:
+        # Check dependencies
+        if not check_dependencies():
             raise typer.Exit(1)
-        return
 
-    # Start the main application
-    try:
-        console.print("[bold blue]🚀 Starting OneNote Copilot...[/bold blue]")
-        console.print()
+        # Handle auth-only mode
+        if auth_only:
+            success = asyncio.run(authenticate_only())
+            if not success:
+                raise typer.Exit(1)
+            return
 
-        # Run the CLI interface
-        asyncio.run(run_main_app(debug))
+        # Start the main application
+        try:
+            console.print("[bold blue]🚀 Starting OneNote Copilot...[/bold blue]")
+            console.print()
 
-    except KeyboardInterrupt:
-        console.print("\n[yellow]👋 OneNote Copilot interrupted. Goodbye![/yellow]")
-    except Exception as e:
-        if debug:
-            console.print_exception()
-        else:
-            console.print(f"[red]❌ Failed to start OneNote Copilot: {e}[/red]")
-            console.print("[dim]💡 Use --debug flag for detailed error information[/dim]")
-        raise typer.Exit(1)
+            # Run the CLI interface
+            asyncio.run(run_main_app(debug))
+
+        except KeyboardInterrupt:
+            console.print("\n[yellow]👋 OneNote Copilot interrupted. Goodbye![/yellow]")
+        except Exception as e:
+            if debug:
+                console.print_exception()
+            else:
+                console.print(f"[red]❌ Failed to start OneNote Copilot: {e}[/red]")
+                console.print("[dim]💡 Use --debug flag for detailed error information[/dim]")
+            raise typer.Exit(1)
 
 
 async def run_main_app(debug: bool = False) -> None:

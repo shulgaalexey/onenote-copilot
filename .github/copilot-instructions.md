@@ -71,7 +71,6 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 - **Types**: Include unit tests, integration tests, and end-to-end tests
 - **Pattern**: Each feature needs happy path, edge case, and failure tests
 
-IMPORTANT!!!
 
 ### 📝 Test Output Tracking
 **NEW MANDATORY TESTING APPROACH**:
@@ -84,10 +83,9 @@ IMPORTANT!!!
 
 Example PowerShell command for test tracking:
 ```powershell
-python -m pytest tests/ -v --cov=src --cov-report=term-missing 2>&1 |
-  ForEach-Object { "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $_" } > TEST_RUN.md
-Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+`python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"`
 ```
+
 
 Use the `TEST_RUN.md` file content to fix the failing tests if any.
 

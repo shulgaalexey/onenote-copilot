@@ -313,6 +313,27 @@ onenote-copilot/
 6. Push to the branch: `git push origin feature/amazing-feature`
 7. Open a Pull Request
 
+### 🗂️ File Deletion Policy
+
+**🚨 IMPORTANT**: This project maintains strict file deletion tracking for audit and recovery purposes.
+
+#### Before Deleting Any File:
+- **MANDATORY**: Log deletion in `DEL_FILES.md` before removing the file
+- **Include**: Full file path, reason, context, and date
+- **Follow**: Template format provided in `DEL_FILES.md`
+- **Purpose**: Maintain project history and enable file recovery
+
+#### Example Entry:
+```markdown
+**File Path**: `src/deprecated/old_module.py`
+- **Reason**: Replaced by new implementation
+- **Context**: Functionality moved to src/new/improved_module.py
+- **Deleted by**: [Your name]
+- **Date**: YYYY-MM-DD
+```
+
+**This applies to all contributors and automated processes. No exceptions.**
+
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

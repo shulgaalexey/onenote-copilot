@@ -118,14 +118,33 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&
 1. **ALWAYS redirect pytest output to `TEST_RUN.md`** - never run tests without this redirection
 2. **WAIT for `%TESTS FINISHED%` marker** - this indicates test completion
 3. **NEVER proceed to next command** until you see the completion marker
-4. **Monitor TEST_RUN.md contents** to track progress in real-time
-5. **Maximum wait time: 5 minutes** - investigate if tests take longer
 
-#### Why This Approach Is Essential
-- **Prevents premature actions**: Copilot Agent won't jump to next step while tests are running
-- **Provides visibility**: Real-time test progress monitoring
-- **Ensures completion**: Clear signal when all tests have finished
-- **Debugging support**: Full test output captured for failure analysis
+### 🗂️ File Deletion Tracking Protocol
+**🚨 CRITICAL PRACTICE - MANDATORY FOR ALL FILE DELETIONS 🚨**
+
+#### Before Deleting Any File:
+1. **REQUIRED**: Add entry to `DEL_FILES.md` before deletion
+2. **Include**: Full file path, deletion reason, context, and date
+3. **Follow**: The template format provided in `DEL_FILES.md`
+4. **Purpose**: Maintain audit trail and enable file recovery
+
+#### Entry Template:
+```markdown
+**File Path**: `path/to/file.ext`
+- **Reason**: Brief reason for deletion
+- **Context**: Why file existed and why removing
+- **Deleted by**: [Name/Agent identifier]
+- **Date**: YYYY-MM-DD
+```
+
+#### Why This Matters:
+- **Audit Trail**: Track all file removals and decisions
+- **Project History**: Understand evolution and changes
+- **Recovery**: Enable restoration of accidentally deleted files
+- **Team Coordination**: Prevent confusion about missing files
+- **Documentation**: Record decision-making process
+
+**NEVER delete without logging in DEL_FILES.md first!**
 
 #### Test Execution Workflow
 1. **Execute command**: Run the exact PowerShell command above

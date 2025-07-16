@@ -174,6 +174,33 @@ Also when running the app in the terminal. **IT TAKES TIME TO START THE APP!!!**
 - **External Dependencies**: Don't modify external library code directly
 - **Git History**: Don't rewrite commit history on shared branches
 
+### 🗂️ File Deletion Tracking
+**🚨 CRITICAL PRACTICE - NEVER SKIP THIS STEP 🚨**
+
+Before deleting ANY file in the repository:
+1. **MANDATORY**: Add the file to `DEL_FILES.md` with deletion details
+2. **Include**: Full file path, reason for deletion, date, and context
+3. **Template**: Follow the template provided in `DEL_FILES.md`
+4. **Purpose**: Maintain project history and enable recovery if needed
+
+**Example entry format:**
+```markdown
+**File Path**: `tests/test_example.py`
+- **Reason**: Failing tests due to outdated mocking approach
+- **Context**: Replaced with simpler test implementation
+- **Deleted by**: [Your name/Agent]
+- **Date**: YYYY-MM-DD
+```
+
+**Why this matters:**
+- Provides audit trail for deleted files
+- Helps understand project evolution
+- Enables recovery of accidentally deleted files
+- Documents decision-making process
+- Prevents confusion about missing files
+
+**NEVER delete a file without logging it in DEL_FILES.md first!**
+
 ### 🔧 Environment Variables
 - **Development**: Use `.env.local` file (gitignored)
 - **Documentation**: Update `.env.example` when adding new variables

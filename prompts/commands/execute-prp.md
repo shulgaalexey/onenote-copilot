@@ -33,13 +33,27 @@ Implement a feature using using the PRP file.
    - Re-run tests using same TEST_RUN.md approach until all pass
    - Never skip the TEST_RUN.md pattern - it prevents premature command execution
 
-5. **Complete**
+5. **File Deletion Protocol**
+   - **🚨 MANDATORY**: Before deleting ANY file, log it in `DEL_FILES.md`
+   - **Required Info**: Full file path, reason, context, date, and your identifier
+   - **Template**: Follow the standardized format in `DEL_FILES.md`
+   - **No Exceptions**: Every deletion must be logged for audit trail
+   - **Example Entry**:
+     ```markdown
+     **File Path**: `src/deprecated/old_module.py`
+     - **Reason**: Replaced by new LangGraph implementation
+     - **Context**: Legacy code from Pydantic AI migration
+     - **Deleted by**: GitHub Copilot Agent
+     - **Date**: YYYY-MM-DD
+     ```
+
+6. **Complete**
    - Ensure all checklist items done
    - Run final validation suite
    - Report completion status
    - Read the PRP again to ensure you have implemented everything
 
-6. **Reference the PRP**
+7. **Reference the PRP**
    - You can always reference the PRP again if needed
 
 Note: If validation fails, use error patterns in PRP to fix and retry.

@@ -64,6 +64,30 @@ Save as: `PRPs/{feature-name}.md`
 - [ ] Clear implementation path with GitHub Copilot integration notes
 - [ ] Error handling documented
 - [ ] PowerShell commands used instead of bash where applicable
+- [ ] File deletion protocol included if PRP involves removing files
+
+### 🗂️ File Deletion Protocol (If Applicable)
+**If your PRP involves deleting files, include this section:**
+
+#### Mandatory Deletion Steps:
+1. **Before Deletion**: All files must be logged in `DEL_FILES.md`
+2. **Required Information**:
+   - Full file path relative to repository root
+   - Clear reason for deletion
+   - Context about why file existed and why removing
+   - Date of deletion
+   - Identifier of who performed deletion
+
+#### Deletion Entry Template:
+```markdown
+**File Path**: `path/to/file.ext`
+- **Reason**: Specific reason for removal
+- **Context**: Background and replacement info
+- **Deleted by**: [Agent/Developer name]
+- **Date**: YYYY-MM-DD
+```
+
+**NO EXCEPTIONS**: Every file deletion must be documented in `DEL_FILES.md` first!
 
 Score the PRP on a scale of 1-10 (confidence level to succeed in one-pass implementation using GitHub Copilot agent mode)
 

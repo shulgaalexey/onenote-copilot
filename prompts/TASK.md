@@ -20,6 +20,7 @@ This file tracks all project tasks using a priority-based system optimized for s
 - [x] Update all documentation to use pip instead of uv
 - [x] Update all references from Pydantic AI to LangGraph
 - [x] Create comprehensive PRP for OneNote Copilot CLI implementation
+- [ ] Improve test coverage to achieve at least 80% code coverage
 
 ### P-1 (Sooner than Later)
 - [ ] Execute OneNote Copilot CLI PRP using GitHub Copilot agent mode
@@ -178,5 +179,32 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&
 - When fixing bugs or issues
 - During PRP validation phases
 - After dependency updates
+
+### 🗂️ File Deletion Protocol
+**🚨 MANDATORY - NEVER DELETE WITHOUT LOGGING 🚨**
+
+#### Before Any File Deletion:
+1. **REQUIRED**: Log deletion in `DEL_FILES.md` with full details
+2. **Include**: File path, reason, context, date, and your identifier
+3. **Template**: Use the standardized format in `DEL_FILES.md`
+4. **Verify**: Double-check that deletion is necessary
+
+#### Deletion Entry Requirements:
+```markdown
+**File Path**: `relative/path/to/file.ext`
+- **Reason**: Clear, specific reason for deletion
+- **Context**: Background on why file existed and why removing
+- **Deleted by**: [Your name or agent identifier]
+- **Date**: YYYY-MM-DD
+```
+
+#### Critical Benefits:
+- **Audit Trail**: Complete history of file changes
+- **Recovery**: Can restore files if needed later
+- **Team Communication**: Others understand what happened
+- **Decision Documentation**: Preserves reasoning for future reference
+- **Project Evolution**: Track how project structure changes over time
+
+**NO EXCEPTIONS - Always log before deleting!**
 
 ## Project Workflow Integration

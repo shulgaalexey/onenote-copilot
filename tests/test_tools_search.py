@@ -297,6 +297,81 @@ class TestOneNoteSearchTool:
         assert len(result.pages) == 1
         assert result.pages[0].title == "Test Page"
 
+    @pytest.mark.asyncio
+    async def test_search_pages_api_uses_filter_parameter(self):
+        """Test that _search_pages_api uses $filter instead of $search parameter."""
+        # Mock authenticator
+        mock_auth = AsyncMock(spec=MicrosoftAuthenticator)
+        mock_auth.get_valid_token.return_value = "fake_token"
+
+        # Mock HTTP response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"value": []}
+
+        # Mock httpx client
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            tool = OneNoteSearchTool(authenticator=mock_auth)
+            await tool._search_pages_api("test query", "fake_token", 10)
+
+            # Verify the API was called
+            assert mock_client.get.called
+
+            # Get the call arguments
+            call_args = mock_client.get.call_args
+
+            # Check the parameters
+            params = call_args[1]['params']
+
+            # Verify we're using $filter instead of $search (this was the bug)
+            assert '$filter' in params
+            assert '$search' not in params
+
+            # Verify the filter format is correct
+            assert 'contains(tolower(title)' in params['$filter']
+            assert 'test query' in params['$filter']
+
+            # Verify other expected parameters
+            assert '$top' in params
+            assert '$select' in params
+            assert '$orderby' in params
+
+    @pytest.mark.asyncio
+    async def test_search_pages_api_escapes_quotes(self):
+        """Test that single quotes in queries are properly escaped."""
+        # Mock authenticator
+        mock_auth = AsyncMock(spec=MicrosoftAuthenticator)
+        mock_auth.get_valid_token.return_value = "fake_token"
+
+        # Mock HTTP response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"value": []}
+
+        # Mock httpx client
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_response
+
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            tool = OneNoteSearchTool(authenticator=mock_auth)
+            # Test query with single quotes (potential injection risk)
+            await tool._search_pages_api("test's query", "fake_token", 10)
+
+            # Get the parameters
+            call_args = mock_client.get.call_args
+            params = call_args[1]['params']
+
+            # Verify single quotes are escaped (doubled)
+            filter_query = params['$filter']
+            assert "test''s query" in filter_query
+
 
 class TestOneNoteSearchError:
     """Test OneNote search error exception."""

@@ -144,8 +144,22 @@ class OneNoteSearchTool:
             # Get authentication token
             token = await self.authenticator.get_valid_token()
 
-            # Search pages
+            # Search pages by title first
             pages_data, api_calls = await self._search_pages_api(processed_query, token, max_results)
+
+            # If title search yields few results, try content search
+            if len(pages_data) < 3:
+                logger.debug(f"Title search returned {len(pages_data)} results, trying content search")
+                content_pages_data, content_api_calls = await self._search_pages_by_content(processed_query, token, max_results)
+                api_calls += content_api_calls
+
+                # Merge results, avoiding duplicates
+                existing_ids = {page.get('id') for page in pages_data}
+                for page in content_pages_data:
+                    if page.get('id') not in existing_ids:
+                        pages_data.append(page)
+                        if len(pages_data) >= max_results:
+                            break
 
             # Convert to OneNotePage models
             pages = []
@@ -211,9 +225,14 @@ class OneNoteSearchTool:
             "Content-Type": "application/json"
         }
 
-        # Build search parameters
+        # Build search parameters using $filter instead of $search
+        # OneNote API doesn't support $search parameter, so we use title filtering
+        # Escape single quotes to prevent injection
+        escaped_query = query.replace("'", "''")
+        filter_query = f"contains(tolower(title), '{escaped_query.lower()}')"
+
         params = {
-            "$search": query,
+            "$filter": filter_query,
             "$top": min(max_results, 50),  # API limit is 50 per request
             "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
             "$orderby": "lastModifiedDateTime desc"
@@ -250,6 +269,100 @@ class OneNoteSearchTool:
         except Exception as e:
             logger.error(f"API request failed: {e}")
             raise OneNoteSearchError(f"API request failed: {e}")
+
+    async def _search_pages_by_content(self, query: str, token: str, max_results: int) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Search pages by fetching recent pages and filtering by content.
+
+        This is a fallback method when title search doesn't yield enough results.
+        It fetches recent pages and searches their content locally.
+
+        Args:
+            query: Search query
+            token: Authentication token
+            max_results: Maximum results to return
+
+        Returns:
+            Tuple of (pages data, api calls made)
+        """
+        await self._enforce_rate_limit()
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+
+        # Get recent pages (no filter, just recent ones)
+        params = {
+            "$top": min(20, max_results * 2),  # Get more pages to search through
+            "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
+            "$orderby": "lastModifiedDateTime desc"
+        }
+
+        endpoint = f"{self.base_url}/me/onenote/pages"
+        api_calls = 0
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(endpoint, headers=headers, params=params)
+
+                if response.status_code != 200:
+                    logger.warning(f"Content search failed: {response.status_code}")
+                    return [], 1
+
+                data = response.json()
+                pages = data.get("value", [])
+                api_calls += 1
+
+                if not pages:
+                    return [], api_calls
+
+                logger.debug(f"Fetched {len(pages)} recent pages for content search")
+
+                # Convert to OneNotePage objects for content fetching
+                page_objects = []
+                for page_data in pages:
+                    try:
+                        page = OneNotePage(**page_data)
+                        page_objects.append(page)
+                    except Exception as e:
+                        logger.warning(f"Failed to parse page data: {e}")
+                        continue
+
+                # Fetch content for these pages
+                content_api_calls = await self._fetch_page_contents(page_objects, token)
+                api_calls += content_api_calls
+
+                # Filter pages by content
+                matching_pages = []
+                query_lower = query.lower()
+
+                for page in page_objects:
+                    if hasattr(page, 'text_content') and page.text_content:
+                        if query_lower in page.text_content.lower():
+                            # Convert back to dict format to match expected return type
+                            page_dict = {
+                                'id': page.id,
+                                'title': page.title,
+                                'createdDateTime': page.created_datetime,
+                                'lastModifiedDateTime': page.last_modified_datetime,
+                                'contentUrl': page.content_url,
+                                'parentSection': page.parent_section,
+                                'parentNotebook': page.parent_notebook
+                            }
+                            matching_pages.append(page_dict)
+
+                            if len(matching_pages) >= max_results:
+                                break
+
+                logger.debug(f"Content search found {len(matching_pages)} matching pages")
+                return matching_pages, api_calls
+
+        except httpx.TimeoutException:
+            raise OneNoteSearchError("Content search request timed out")
+        except Exception as e:
+            logger.error(f"Content search failed: {e}")
+            return [], api_calls
 
     async def _fetch_page_contents(self, pages: List[OneNotePage], token: str) -> int:
         """

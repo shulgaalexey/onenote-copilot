@@ -477,6 +477,7 @@ class OneNoteAgent:
             # Track execution state
             tool_executed = False
             final_response_found = False
+            user_query_needs_tools = self._needs_tool_call(query)
 
             # Process through the graph
             async for event in self.graph.astream(initial_state):
@@ -506,7 +507,7 @@ class OneNoteAgent:
                                     break  # Exit the event loop
 
                                 # Check if this is a direct response (no tools needed)
-                                elif not tool_executed and not self._needs_tool_call(last_message.content) and not last_message.content.startswith("{"):
+                                elif not tool_executed and not user_query_needs_tools and not last_message.content.startswith("{"):
                                     # Direct response without tools
                                     logger.debug("Direct response without tools")
                                     yield StreamingChunk.text_chunk(last_message.content, is_final=True)

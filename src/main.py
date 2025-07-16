@@ -19,12 +19,12 @@ from typing import Optional
 
 import typer
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.traceback import install
 
 from .auth.microsoft_auth import MicrosoftAuthenticator
 from .cli.interface import OneNoteCLI
+from .config.logging import get_logger, setup_logging
 from .config.settings import get_settings
 
 # Configure Rich traceback handling
@@ -44,38 +44,6 @@ console = Console()
 
 # Version info
 __version__ = "1.0.0"
-
-
-def setup_logging(debug: bool = False) -> None:
-    """
-    Set up logging with Rich handler.
-
-    Args:
-        debug: Enable debug level logging
-    """
-    level = logging.DEBUG if debug else logging.INFO
-
-    # Configure root logger
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        datefmt="[%X]",
-        handlers=[
-            RichHandler(
-                console=console,
-                rich_tracebacks=True,
-                show_path=debug,
-                show_time=debug
-            )
-        ]
-    )
-
-    # Set specific logger levels
-    if not debug:
-        # Reduce noise from external libraries
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-        logging.getLogger("urllib3").setLevel(logging.WARNING)
-        logging.getLogger("msal").setLevel(logging.WARNING)
 
 
 def show_system_info() -> None:
@@ -121,8 +89,11 @@ async def authenticate_only() -> bool:
     Returns:
         True if authentication successful, False otherwise
     """
+    logger = get_logger(__name__)
+
     try:
         settings = get_settings()
+        logger.info("🔑 Initializing Microsoft authenticator...")
         authenticator = MicrosoftAuthenticator(settings)
 
         console.print("[bold blue]🔐 Starting Microsoft authentication...[/bold blue]")
@@ -130,17 +101,21 @@ async def authenticate_only() -> bool:
         console.print()
 
         with console.status("[bold blue]Waiting for authentication...", spinner="dots"):
+            logger.info("🌐 Requesting access token...")
             token = await authenticator.get_access_token()
 
         if token:
+            logger.info("✅ Authentication successful, token cached")
             console.print("[green]✅ Authentication successful![/green]")
             console.print(f"🎫 Token cached to: {settings.token_cache_file}")
             return True
         else:
+            logger.warning("❌ Authentication failed - no token received")
             console.print("[red]❌ Authentication failed.[/red]")
             return False
 
     except Exception as e:
+        logger.error(f"❌ Authentication error: {e}", exc_info=True)
         console.print(f"[red]❌ Authentication error: {e}[/red]")
         return False
 
@@ -250,8 +225,19 @@ def main(
         console.print(f"[bold blue]OneNote Copilot v{__version__}[/bold blue]")
         return
 
-    # Setup logging
-    setup_logging(debug)
+    # Setup comprehensive logging system early
+    settings = get_settings()
+    console_level = "DEBUG" if debug else settings.log_level
+    setup_logging(
+        console=console,
+        clear_log_file=settings.log_clear_on_startup,
+        console_level=console_level,
+        file_level="DEBUG"  # Always capture debug in files
+    )
+
+    # Get logger for main module
+    logger = get_logger(__name__)
+    logger.info(f"🚀 OneNote Copilot v{__version__} starting...")
 
     # Handle info flag
     if show_info:
@@ -261,14 +247,20 @@ def main(
     # If no command was invoked, run the main chat interface
     if ctx.invoked_subcommand is None:
         # Check dependencies
+        logger.info("🔍 Checking dependencies...")
         if not check_dependencies():
+            logger.error("❌ Dependency check failed")
             raise typer.Exit(1)
+        logger.info("✅ All dependencies available")
 
         # Handle auth-only mode
         if auth_only:
+            logger.info("🔐 Running authentication-only mode...")
             success = asyncio.run(authenticate_only())
             if not success:
+                logger.error("❌ Authentication failed")
                 raise typer.Exit(1)
+            logger.info("✅ Authentication completed successfully")
             return
 
         # Start the main application
@@ -277,11 +269,14 @@ def main(
             console.print()
 
             # Run the CLI interface
+            logger.info("🎯 Starting main application interface...")
             asyncio.run(run_main_app(debug))
 
         except KeyboardInterrupt:
+            logger.info("👋 Application interrupted by user")
             console.print("\n[yellow]👋 OneNote Copilot interrupted. Goodbye![/yellow]")
         except Exception as e:
+            logger.error(f"❌ Application failed to start: {e}", exc_info=debug)
             if debug:
                 console.print_exception()
             else:
@@ -297,19 +292,25 @@ async def run_main_app(debug: bool = False) -> None:
     Args:
         debug: Enable debug mode
     """
+    logger = get_logger(__name__)
+
     try:
+        logger.info("🎬 Initializing OneNote CLI interface...")
+
         # Initialize and run CLI
         cli = OneNoteCLI()
+        logger.info("💬 Starting chat interface...")
         await cli.start_chat()
 
         # Show conversation summary if debug enabled
         if debug:
             summary = cli.get_conversation_summary()
             if summary["total_messages"] > 0:
+                logger.info(f"📊 Session Summary: {summary['total_messages']} messages exchanged")
                 console.print(f"\n[dim]📊 Session Summary: {summary['total_messages']} messages exchanged[/dim]")
 
     except Exception as e:
-        logging.error(f"Application error: {e}")
+        logger.error(f"❌ Application error: {e}", exc_info=debug)
         if debug:
             console.print_exception()
         raise

@@ -21,6 +21,7 @@ import httpx
 from msal import PublicClientApplication
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from ..config.logging import log_api_call, log_performance
 from ..config.settings import get_settings
 
 logger = logging.getLogger(__name__)

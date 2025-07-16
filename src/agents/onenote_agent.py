@@ -8,6 +8,7 @@ provide intelligent responses, and stream results in real-time.
 import asyncio
 import json
 import logging
+import time
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage,
@@ -17,6 +18,7 @@ from langgraph.graph import StateGraph
 from typing_extensions import TypedDict
 
 from ..auth.microsoft_auth import AuthenticationError, MicrosoftAuthenticator
+from ..config.logging import log_api_call, log_performance, logged
 from ..config.settings import get_settings
 from ..models.onenote import OneNotePage, SearchResult
 from ..models.responses import (AgentState, OneNoteSearchResponse,

@@ -6,6 +6,7 @@ command handling, and beautiful terminal output.
 """
 
 import asyncio
+import logging
 import sys
 from datetime import datetime
 from typing import Any, Optional
@@ -16,10 +17,13 @@ from rich.prompt import Prompt
 
 from ..agents.onenote_agent import OneNoteAgent
 from ..auth.microsoft_auth import AuthenticationError
+from ..config.logging import log_performance, logged
 from ..config.settings import get_settings
 from ..models.responses import StreamingChunk
 from ..tools.onenote_search import OneNoteSearchError
 from .formatting import CLIFormatter, create_progress_spinner
+
+logger = logging.getLogger(__name__)
 
 
 class OneNoteCLI:

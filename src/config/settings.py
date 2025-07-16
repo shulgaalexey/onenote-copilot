@@ -83,6 +83,30 @@ class Settings(BaseSettings):
         default="INFO",
         description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
     )
+    log_file_enabled: bool = Field(
+        default=True,
+        description="Enable file logging to local project directory"
+    )
+    log_file_max_size_mb: int = Field(
+        default=10,
+        description="Maximum log file size in MB before rotation",
+        gt=0,
+        le=100
+    )
+    log_file_backup_count: int = Field(
+        default=5,
+        description="Number of backup log files to keep",
+        gt=0,
+        le=20
+    )
+    log_clear_on_startup: bool = Field(
+        default=True,
+        description="Clear log file on application startup"
+    )
+    log_performance_enabled: bool = Field(
+        default=True,
+        description="Enable performance logging for API calls and functions"
+    )
     debug_enabled: bool = Field(
         default=False,
         description="Enable debug mode for detailed logging and error output",

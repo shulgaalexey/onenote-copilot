@@ -15,6 +15,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..auth.microsoft_auth import AuthenticationError, MicrosoftAuthenticator
+from ..config.logging import log_api_call, log_performance, logged
 from ..config.settings import get_settings
 from ..models.onenote import OneNotePage, SearchResult
 

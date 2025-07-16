@@ -12,7 +12,6 @@ This file tracks all files that have been deleted from the repository to maintai
 
 ## Deleted Files
 
-
 ---
 
 ## Template for Future Deletions

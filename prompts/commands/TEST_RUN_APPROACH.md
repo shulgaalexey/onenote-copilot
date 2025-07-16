@@ -2,7 +2,66 @@
 
 ## 🚨 CRITICAL: Why This Approach Is Required
 
-The `TEST_RUN.md` approach is **MANDATORY** for all pytest execution to prevent Copilot Agent from prematurely jumping to the next command while tests are still running. This is a common issue where the Agent loses patience during test startup and tries alternative approaches, which is completely inappropriate.
+The `TEST_RUN.md` approach is **MANDATORY** for all pytest execution and ANY Python script execution that could take time to prevent Copilot Agent from prematurely jumping to the next command while code is still running. This is a common issue where the Agent loses patience during test startup and tries alternative approaches, which is completely inappropriate.
+
+## 🚨 RECENT VIOLATION EXAMPLE - NEVER DO THIS AGAIN
+
+**What I Did Wrong (July 16, 2025):**
+1. Created ad-hoc test files (`test_query_fix.py`, `simple_test.py`)
+2. Ran them directly in terminal: `python test_query_fix.py`
+3. Lost patience when import seemed stuck
+4. Didn't wait for completion markers
+5. Abandoned proper testing approach
+
+**Why This Was CRITICAL MISTAKE:**
+- Violated mandatory testing protocol
+- Could have missed important failures
+- Didn't track execution properly
+- Set bad precedent for future development
+
+**What Should Have Been Done:**
+```powershell
+# Create test file if needed
+# ... create test file ...
+
+# ALWAYS run with TEST_RUN.md redirection
+python test_query_fix.py > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+
+# Monitor progress
+Get-Content TEST_RUN.md -Tail 5
+
+# Wait for completion marker
+Select-String -Path TEST_RUN.md -Pattern "%TESTS FINISHED%"
+
+# Only then proceed to next steps
+```
+
+**LESSON LEARNED**:
+- NEVER create and run tests without TEST_RUN.md approach
+- NEVER lose patience during test execution
+- ALWAYS wait for completion markers
+- ALWAYS follow the established protocol
+
+## How to Recover from Violations
+
+If you've already run tests incorrectly:
+1. **STOP immediately** - don't proceed with next steps
+2. **Re-run with proper TEST_RUN.md approach**
+3. **Wait for completion marker**
+4. **Document the violation** in PROGRESS.md or DEL_FILES.md
+5. **Update instructions** to prevent future violations
+
+## 🚫 ABSOLUTELY FORBIDDEN PATTERNS
+
+**NEVER DO THESE THINGS:**
+- Running tests directly in terminal: `python -m pytest tests/`
+- Running Python scripts directly: `python test_something.py`
+- Creating ad-hoc test files and running them without TEST_RUN.md
+- Using sleep/timeout commands to "wait" for tests
+- Proceeding to next steps without seeing `%TESTS FINISHED%` marker
+- Abandoning test sessions because there's no immediate output
+
+**THESE VIOLATIONS WILL CAUSE PROJECT FAILURES!**
 
 ## Required Command Pattern
 
@@ -12,13 +71,21 @@ The `TEST_RUN.md` approach is **MANDATORY** for all pytest execution to prevent 
 python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
 ```
 
+**For ANY Python script execution that could take time:**
+
+```powershell
+python your_script.py > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
 ## Essential Rules
 
 1. **NEVER run pytest without TEST_RUN.md redirection**
-2. **ALWAYS wait for the `%TESTS FINISHED%` marker** before proceeding to any next step
-3. **MONITOR TEST_RUN.md contents** to track test progress in real-time
-4. **NEVER abandon test sessions** even if there's initial delay or no immediate output
-5. **MAXIMUM wait time: 5 minutes** - if tests don't complete, investigate but don't give up
+2. **NEVER run any Python script without TEST_RUN.md if it could take more than 5 seconds**
+3. **ALWAYS wait for the `%TESTS FINISHED%` marker** before proceeding to any next step
+4. **MONITOR TEST_RUN.md contents** to track progress in real-time
+5. **NEVER abandon test sessions** even if there's initial delay or no immediate output
+6. **MAXIMUM wait time: 5 minutes** - if execution doesn't complete, investigate but don't give up
+7. **DELETE temporary test files** only after using TEST_RUN.md approach
 
 ## How It Works
 

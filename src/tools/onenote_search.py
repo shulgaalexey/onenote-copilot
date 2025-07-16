@@ -7,6 +7,7 @@ rate limiting, and comprehensive error handling.
 
 import asyncio
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -54,6 +55,59 @@ class OneNoteSearchTool:
         self._request_count = 0
         self._rate_limit_window_start = time.time()
 
+    def _prepare_search_query(self, natural_query: str) -> str:
+        """
+        Prepare a natural language query for OneNote search API.
+
+        The Microsoft Graph OneNote search API expects specific query formats.
+        This method extracts keywords and formats them appropriately.
+
+        Args:
+            natural_query: Natural language query from user
+
+        Returns:
+            Formatted query string for API
+        """
+        if not natural_query or not natural_query.strip():
+            return ""
+
+        # Remove common question words and patterns
+        query = natural_query.strip()
+
+        # Remove question marks and other problematic punctuation
+        query = re.sub(r'[?!]', '', query)
+
+        # Remove common question words at the beginning
+        question_patterns = [
+            r'^what\s+(did\s+i\s+)?',
+            r'^where\s+(did\s+i\s+)?',
+            r'^when\s+(did\s+i\s+)?',
+            r'^how\s+(did\s+i\s+)?',
+            r'^show\s+me\s+',
+            r'^find\s+',
+            r'^search\s+for\s+',
+            r'^look\s+for\s+'
+        ]
+
+        for pattern in question_patterns:
+            query = re.sub(pattern, '', query, flags=re.IGNORECASE)
+
+        # Remove common filler words
+        filler_words = ['about', 'on', 'regarding', 'concerning', 'related to']
+        for word in filler_words:
+            # Only remove if it's at the beginning or preceded by whitespace
+            query = re.sub(rf'\b{re.escape(word)}\b\s*', '', query, flags=re.IGNORECASE)
+
+        # Clean up extra whitespace
+        query = re.sub(r'\s+', ' ', query).strip()
+
+        # If query is too short after processing, use original minus punctuation
+        if len(query) < 3:
+            query = re.sub(r'[?!]', '', natural_query.strip())
+
+        logger.debug(f"Processed query: '{natural_query}' -> '{query}'")
+        return query
+
     async def search_pages(self, query: str, max_results: Optional[int] = None) -> SearchResult:
         """
         Search OneNote pages using the Microsoft Graph API.
@@ -76,16 +130,22 @@ class OneNoteSearchTool:
             if not query or not query.strip():
                 raise OneNoteSearchError("Search query cannot be empty")
 
-            query = query.strip()
+            # Process natural language query for API
+            original_query = query.strip()
+            processed_query = self._prepare_search_query(original_query)
+
+            if not processed_query:
+                raise OneNoteSearchError("Unable to extract searchable terms from query")
+
             max_results = max_results or self.max_results
 
-            logger.debug(f"Searching OneNote pages for: '{query}'")
+            logger.debug(f"Searching OneNote pages for: '{original_query}' (processed: '{processed_query}')")
 
             # Get authentication token
             token = await self.authenticator.get_valid_token()
 
             # Search pages
-            pages_data, api_calls = await self._search_pages_api(query, token, max_results)
+            pages_data, api_calls = await self._search_pages_api(processed_query, token, max_results)
 
             # Convert to OneNotePage models
             pages = []
@@ -106,13 +166,15 @@ class OneNoteSearchTool:
 
             result = SearchResult(
                 pages=pages,
-                query=query,
+                query=original_query,
                 total_count=len(pages),
                 execution_time=execution_time,
                 api_calls_made=api_calls,
                 search_metadata={
                     "search_endpoint": "/me/onenote/pages",
                     "search_parameter": "$search",
+                    "original_query": original_query,
+                    "processed_query": processed_query,
                     "content_fetched": min(5, len(pages))
                 }
             )

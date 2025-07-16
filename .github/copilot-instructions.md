@@ -75,23 +75,37 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 
 ### 📝 Test Output Tracking
 **🚨 MANDATORY TESTING APPROACH - NEVER SKIP THIS**:
+- **ALWAYS use `TEST_RUN.md` for ANY test execution** - this includes unit tests, integration tests, debugging tests, ad-hoc tests, or ANY Python script execution that could take time
+- **NEVER run tests directly in terminal without output redirection** - this leads to incomplete execution tracking
 - **When running tests, save the output in a `TEST_RUN.md` file** at the project root (ensure each trace line is started with the current timestamp).
 - **Overwrite this file on each test run** - it's a temporary tracking file.
 - **When tests finish, append the line `%TESTS FINISHED%`** to mark completion.
 - **Monitor this file and never proceed to the next step** until you see this marker.
 - **Maximum wait time: 5 minutes** - if tests don't complete within this timeframe, investigate or abort.
 - **Use this approach for ALL test runs** to ensure proper completion tracking.
+- **NO EXCEPTIONS**: Even simple Python scripts, import tests, or debugging code MUST use this approach if they could take more than a few seconds
 
 Example PowerShell command for test tracking:
 ```powershell
 python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
 ```
 
+**CRITICAL EXAMPLES OF WHAT REQUIRES TEST_RUN.md**:
+- `python -m pytest` (any pytest command)
+- `python test_something.py` (any test script)
+- `python -c "import complex_module; complex_module.test()"` (any import or code execution)
+- `python app.py` (any application startup)
+- `python -m src.main` (any module execution)
+
 **WHY THIS IS CRITICAL**: This prevents Copilot Agent from jumping to the next command before tests finish. Tests often take time to start up, and the Agent must be patient and wait for the completion marker rather than abandoning the test session.
 
 Use the `TEST_RUN.md` file content to fix failing tests if any.
 
-**DO NOT RUN TERMINAL COMMANDS LIKE `sleep 10` or `timeout 10` to wait for tests to finish. It will not work properly.**
+**ABSOLUTELY FORBIDDEN**:
+- Running tests directly in terminal without `> TEST_RUN.md 2>&1`
+- Using `sleep` or `timeout` commands to wait for tests
+- Creating ad-hoc test files and running them without TEST_RUN.md tracking
+- Proceeding to next steps without seeing `%TESTS FINISHED%` marker
 
 Also when running the app in the terminal. **IT TAKES TIME TO START THE APP!!!**
 
@@ -244,3 +258,33 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&
 - **Packaging**: Use modern Python packaging with `pyproject.toml`
 - **Dependencies**: Pin exact versions for reproducible builds
 - **Scripts**: All deployment scripts must be PowerShell compatible
+
+**🚨 LEARN FROM RECENT VIOLATIONS 🚨**
+
+**Case Study - July 16, 2025**: During query processing fix, the Agent created ad-hoc test files (`test_query_fix.py`, `simple_test.py`) and ran them directly in terminal without TEST_RUN.md redirection. This violated the mandatory testing protocol and could have led to missed failures or incomplete execution tracking.
+
+**What was done wrong:**
+- Created temporary test files without proper execution tracking
+- Ran `python test_query_fix.py` directly in terminal
+- Lost patience when import seemed stuck and abandoned proper approach
+- Proceeded to next steps without completion confirmation
+
+**Why this was dangerous:**
+- Could miss critical test failures
+- No execution tracking or debugging information
+- Sets bad precedent for future development
+- Violates established project protocols
+
+**Correct approach for ANY Python execution:**
+```powershell
+# Even for simple scripts - ALWAYS use TEST_RUN.md
+python test_query_fix.py > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+
+# Monitor progress
+Get-Content TEST_RUN.md -Tail 5
+
+# Wait for completion
+Select-String -Path TEST_RUN.md -Pattern "%TESTS FINISHED%"
+```
+
+**NEVER AGAIN**: Any Python script execution that could take time MUST use TEST_RUN.md approach.

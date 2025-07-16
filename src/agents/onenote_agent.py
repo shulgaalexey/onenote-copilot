@@ -623,43 +623,39 @@ class OneNoteAgent:
         return CONVERSATION_STARTERS
 
     async def list_notebooks(self) -> List[Dict[str, Any]]:
-        """List all notebooks via LangGraph tool."""
+        """List all notebooks directly via search tool."""
         try:
-            # Create a message requesting notebooks
-            messages = [HumanMessage(content="List my notebooks")]
-            state = MessagesState(messages=messages)
+            logger.info("Fetching OneNote notebooks list")
 
-            # Process through notebooks node
-            result_state = await self._get_notebooks_node(state)
+            # Ensure we have a valid authenticator and search tool
+            if not self.search_tool:
+                raise Exception("Search tool not initialized")
 
-            # Extract notebook data from the response
-            if result_state.messages:
-                last_message = result_state.messages[-1]
-                if hasattr(last_message, 'content'):
-                    # Parse the response for notebook information
-                    # This is a simplified version - in reality, you'd parse the actual response
-                    return [{"name": "Sample Notebook", "id": "sample-id"}]
+            notebooks = await self.search_tool.get_notebooks()
+            logger.info(f"Retrieved {len(notebooks)} notebooks")
+            return notebooks
 
-            return []
         except Exception as e:
             logger.error(f"Failed to list notebooks: {e}")
+            # Return empty list instead of raising to prevent CLI crashes
             return []
 
     async def get_recent_pages(self, limit: int = 10) -> List[OneNotePage]:
-        """Get recent pages via LangGraph tool."""
+        """Get recent pages directly via search tool."""
         try:
-            # Create a message requesting recent pages
-            messages = [HumanMessage(content=f"Get my {limit} most recent pages")]
-            state = MessagesState(messages=messages)
+            logger.info(f"Fetching {limit} recent OneNote pages")
 
-            # Process through recent pages node
-            result_state = await self._get_recent_pages_node(state)
+            # Ensure we have a valid authenticator and search tool
+            if not self.search_tool:
+                raise Exception("Search tool not initialized")
 
-            # Extract page data from the response
-            # This is a simplified version - in reality, you'd parse the actual response
-            return []
+            pages = await self.search_tool.get_recent_pages(limit)
+            logger.info(f"Retrieved {len(pages)} recent pages")
+            return pages
+
         except Exception as e:
             logger.error(f"Failed to get recent pages: {e}")
+            # Return empty list instead of raising to prevent CLI crashes
             return []
 
     async def stream_query(self, query: str) -> AsyncGenerator[StreamingChunk, None]:

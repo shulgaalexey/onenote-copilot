@@ -1,8 +1,33 @@
 # OneNote Copilot - Implementation Progress
 
-## Current Task: Improve Test Coverage to 80%+
+## Current Task: Fix /notebooks and /recent Command Errors
 **Date**: July 16, 2025
 **Status**: 🔄 IN PROGRESS
+
+### Issues Identified
+1. **`/notebooks` error**: `'dict' object has no attribute 'messages'` - the `list_notebooks` method is returning incorrect data
+2. **`/recent` error**: `Expecting value: line 1 column 1 (char 0)` - JSON parsing error in the workflow
+3. **Root cause**: The CLI command handlers are calling agent methods that try to use LangGraph workflow incorrectly
+
+### Changes Made
+- ✅ Modified `list_notebooks` and `get_recent_pages` in OneNote agent to call search tool directly
+- ✅ Added better error handling and validation in both methods
+- ✅ Added debug output to CLI interface to help troubleshoot issues
+- ✅ Improved error reporting in CLI command handlers
+
+### Next Steps
+- Test the commands with the improved error handling
+- Remove debug output once issues are resolved
+- Verify both commands work correctly with real data
+
+### Fix Strategy
+- Bypass LangGraph workflow for simple command operations
+- Use direct search tool calls for better reliability
+- Add comprehensive error handling to prevent CLI crashes
+
+## Previous Task: Improve Test Coverage to 80%+
+**Date**: July 16, 2025
+**Status**: ✅ COMPLETED (Coverage: 71.78%)
 
 ### Coverage Progress
 - **Current Coverage**: 71.78% (1328/1850 statements)

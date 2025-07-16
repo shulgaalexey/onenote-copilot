@@ -251,7 +251,10 @@ class OneNoteCLI:
         """List OneNote notebooks."""
         try:
             with self.console.status("[bold blue]Getting your OneNote notebooks...", spinner="dots"):
+                # Add debug information
+                self.console.print("[dim]DEBUG: Calling agent.list_notebooks()...[/dim]")
                 notebooks = await self.agent.list_notebooks()
+                self.console.print(f"[dim]DEBUG: Received {len(notebooks)} notebooks[/dim]")
 
             if notebooks:
                 table = self.formatter.format_notebooks(notebooks)
@@ -262,15 +265,19 @@ class OneNoteCLI:
             return True
 
         except Exception as e:
-            error_panel = self.formatter.format_error(f"Failed to get notebooks: {e}")
-            self.console.print(error_panel)
+            self.console.print(f"[red]ERROR: Failed to get notebooks: {e}[/red]")
+            import traceback
+            self.console.print(f"[dim]Traceback: {traceback.format_exc()}[/dim]")
             return True
 
     async def _show_recent_pages(self) -> bool:
         """Show recently modified pages."""
         try:
             with self.console.status("[bold blue]Getting recent pages...", spinner="dots"):
+                # Add debug information
+                self.console.print("[dim]DEBUG: Calling agent.get_recent_pages(10)...[/dim]")
                 recent_pages = await self.agent.get_recent_pages(10)
+                self.console.print(f"[dim]DEBUG: Received {len(recent_pages)} pages[/dim]")
 
             if recent_pages:
                 table = self.formatter.format_recent_pages(recent_pages)
@@ -281,8 +288,9 @@ class OneNoteCLI:
             return True
 
         except Exception as e:
-            error_panel = self.formatter.format_error(f"Failed to get recent pages: {e}")
-            self.console.print(error_panel)
+            self.console.print(f"[red]ERROR: Failed to get recent pages: {e}[/red]")
+            import traceback
+            self.console.print(f"[dim]Traceback: {traceback.format_exc()}[/dim]")
             return True
 
     async def _show_conversation_starters(self) -> bool:

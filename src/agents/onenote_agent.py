@@ -537,7 +537,12 @@ class OneNoteAgent:
             "search", "find", "look for", "show me", "what did i write",
             "notes about", "pages about", "content about", "thoughts about",
             "what were my thoughts", "my thoughts on", "what did i think",
-            "what was my", "thoughts on", "ideas about"
+            "what was my", "thoughts on", "ideas about", "how did i",
+            "what did i", "tell me about", "explain", "describe",
+            "what about", "information about", "details about", "data about",
+            "anything about", "stuff about", "material about", "content on",
+            "organise", "organize", "prepare", "preparation", "plan", "planning",
+            "approach", "method", "strategy", "process", "procedure", "steps"
         ]
 
         recent_indicators = [
@@ -582,7 +587,10 @@ class OneNoteAgent:
             semantic_indicators = [
                 "think about", "thought about", "ideas about", "opinion on", "feels about",
                 "vibe", "concept", "philosophy", "approach", "strategy", "methodology",
-                "what did i", "tell me about", "my thoughts on", "my ideas on"
+                "what did i", "tell me about", "my thoughts on", "my ideas on",
+                "how did i", "how i", "organise", "organize", "prepare", "preparation",
+                "plan", "planning", "process", "procedure", "method", "steps",
+                "interview", "interviews", "meeting", "meetings", "work"
             ]
 
             use_semantic = (

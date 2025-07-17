@@ -1,5 +1,34 @@
 # Progress Log
 
+## 2025-07-17: Fixed Agent Query Pattern Recognition ✅ COMPLETED
+- **Task**: Fix agent not recognizing follow-up queries as search requests
+- **Current PRP**: Debugging agent decision logic for tool calling
+- **Context**: First query works perfectly, second query gets stuck with "Direct response without tools"
+- **Root Cause**: `_needs_tool_call()` method missing key query patterns
+- **Issue Analysis**:
+  - ✅ First query: "What are my ideas about the Vibe Coding?" → Matches "ideas about" pattern → Tool call triggered
+  - ❌ Second query: "How did I organise preparations to the interviews?" → No pattern match → No tool call
+  - Problem: Missing patterns like "how did i", "organise", "prepare", "interview" etc.
+- **Fix Applied**:
+  - ✅ **Enhanced Search Indicators**: Added missing patterns to `search_indicators` list:
+    ```python
+    # Added patterns:
+    "how did i", "what did i", "tell me about", "explain", "describe",
+    "what about", "information about", "details about", "data about",
+    "anything about", "stuff about", "material about", "content on",
+    "organise", "organize", "prepare", "preparation", "plan", "planning",
+    "approach", "method", "strategy", "process", "procedure", "steps"
+    ```
+  - ✅ **Enhanced Semantic Indicators**: Added work-related patterns to `semantic_indicators`:
+    ```python
+    # Added patterns:
+    "how did i", "how i", "organise", "organize", "prepare", "preparation",
+    "plan", "planning", "process", "procedure", "method", "steps",
+    "interview", "interviews", "meeting", "meetings", "work"
+    ```
+- **Expected Result**: Agent should now properly recognize queries like "How did I organise..." as search requests
+- **Status**: COMPLETED - Ready for testing
+
 ## 2025-07-17: Fixed Agent Response Generation After Search ✅ COMPLETED
 - **Task**: Fix agent failing to yield final response after successful search results
 - **Current PRP**: Debugging agent event processing and response generation

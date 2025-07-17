@@ -89,6 +89,7 @@ Once authenticated, you can ask natural language questions about your OneNote co
 - `/help` - Show help and available commands
 - `/notebooks` - List your OneNote notebooks
 - `/recent` - Show recently modified pages
+- `/content <title>` - Display full content of a page by title
 - `/starters` - Display conversation starter examples
 - `/clear` - Clear conversation history
 - `/quit` or `/exit` - Exit the application

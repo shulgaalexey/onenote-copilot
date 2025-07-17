@@ -52,17 +52,21 @@ class TestOneNoteLogger:
             logger_system = OneNoteLogger()
             logger_system.log_file_path = temp_log_path
 
-            logger_system.setup_logging(clear_log_file=True)
+            try:
+                logger_system.setup_logging(clear_log_file=True)
 
-            # Log file should be cleared or truncated
-            # On Windows, file might be truncated instead of deleted
-            if temp_log_path.exists():
-                # File was truncated
-                content = temp_log_path.read_text()
-                assert "old content" not in content
-            else:
-                # File was deleted and recreated
-                pass
+                # Log file should be cleared or truncated
+                # On Windows, file might be truncated instead of deleted
+                if temp_log_path.exists():
+                    # File was truncated - read with UTF-8 encoding for Unicode support
+                    content = temp_log_path.read_text(encoding='utf-8')
+                    assert "old content" not in content
+                else:
+                    # File was deleted and recreated
+                    pass
+            finally:
+                # Cleanup file handlers to prevent Windows permission issues
+                logger_system.cleanup()
 
     @patch('src.config.logging.get_settings')
     def test_setup_logging_multiple_calls(self, mock_settings):
@@ -91,12 +95,17 @@ class TestOneNoteLogger:
 
             logger_system = OneNoteLogger()
             logger_system.log_file_path = temp_log_path
-            logger_system.setup_logging()
 
-            test_logger = logger_system.get_logger("test_module")
+            try:
+                logger_system.setup_logging()
 
-            assert isinstance(test_logger, logging.Logger)
-            assert test_logger.name == "test_module"
+                test_logger = logger_system.get_logger("test_module")
+
+                assert isinstance(test_logger, logging.Logger)
+                assert test_logger.name == "test_module"
+            finally:
+                # Cleanup file handlers to prevent Windows permission issues
+                logger_system.cleanup()
 
 
 class TestLoggingFunctions:
@@ -271,12 +280,17 @@ class TestLoggingIntegration:
 
             logger_system = OneNoteLogger()
             logger_system.log_file_path = temp_log_path
-            logger_system.setup_logging()
 
-            # Check that external loggers are set to WARNING level
-            assert logging.getLogger("httpx").level == logging.WARNING
-            assert logging.getLogger("urllib3").level == logging.WARNING
-            assert logging.getLogger("msal").level == logging.WARNING
+            try:
+                logger_system.setup_logging()
+
+                # Check that external loggers are set to WARNING level
+                assert logging.getLogger("httpx").level == logging.WARNING
+                assert logging.getLogger("urllib3").level == logging.WARNING
+                assert logging.getLogger("msal").level == logging.WARNING
+            finally:
+                # Cleanup file handlers to prevent Windows permission issues
+                logger_system.cleanup()
 
     @patch('src.config.logging.get_settings')
     def test_debug_mode_external_loggers(self, mock_settings):
@@ -288,12 +302,17 @@ class TestLoggingIntegration:
 
             logger_system = OneNoteLogger()
             logger_system.log_file_path = temp_log_path
-            logger_system.setup_logging()
 
-            # In debug mode, external loggers should not be suppressed
-            # (They should inherit the root logger level)
-            httpx_logger = logging.getLogger("httpx")
-            assert httpx_logger.level <= logging.DEBUG
+            try:
+                logger_system.setup_logging()
+
+                # In debug mode, external loggers should not be suppressed
+                # (They should inherit the root logger level)
+                httpx_logger = logging.getLogger("httpx")
+                assert httpx_logger.level <= logging.DEBUG
+            finally:
+                # Cleanup file handlers to prevent Windows permission issues
+                logger_system.cleanup()
 
     def test_file_logging_creates_directory(self):
         """Test that logging setup creates the logs directory."""
@@ -327,18 +346,23 @@ class TestLoggingFileOperations:
 
             logger_system = OneNoteLogger()
             logger_system.log_file_path = temp_log_path
-            logger_system.setup_logging(clear_log_file=False)
 
-            test_logger = logger_system.get_logger("test")
+            try:
+                logger_system.setup_logging(clear_log_file=False)
 
-            # Write some log messages (not too many to avoid performance issues)
-            message = "Test message for rotation" * 10  # ~250 bytes
-            for i in range(100):  # Write reasonable amount
-                test_logger.info(f"Message {i}: {message}")
+                test_logger = logger_system.get_logger("test")
 
-            # Check that the log file exists and has content
-            assert temp_log_path.exists()
-            assert temp_log_path.stat().st_size > 0
+                # Write some log messages (not too many to avoid performance issues)
+                message = "Test message for rotation" * 10  # ~250 bytes
+                for i in range(100):  # Write reasonable amount
+                    test_logger.info(f"Message {i}: {message}")
+
+                # Check that the log file exists and has content
+                assert temp_log_path.exists()
+                assert temp_log_path.stat().st_size > 0
+            finally:
+                # Cleanup file handlers to prevent Windows permission issues
+                logger_system.cleanup()
 
     def test_log_file_encoding(self):
         """Test that log files handle Unicode correctly."""
@@ -347,19 +371,19 @@ class TestLoggingFileOperations:
 
             logger_system = OneNoteLogger()
             logger_system.log_file_path = temp_log_path
-            logger_system.setup_logging(clear_log_file=True)
 
-            test_logger = logger_system.get_logger("unicode_test")
+            try:
+                logger_system.setup_logging(clear_log_file=True)
 
-            # Log messages with Unicode characters
-            test_logger.info("Test message with émojis: 🚀 🤖 ✅")
-            test_logger.info("Test message with Chinese: 你好世界")
-            test_logger.info("Test message with Arabic: مرحبا بالعالم")
+                test_logger = logger_system.get_logger("unicode_test")
 
-            # Properly close handlers to release file lock
-            for handler in logging.getLogger().handlers:
-                if hasattr(handler, 'close'):
-                    handler.close()
+                # Log messages with Unicode characters
+                test_logger.info("Test message with émojis: 🚀 🤖 ✅")
+                test_logger.info("Test message with Chinese: 你好世界")
+                test_logger.info("Test message with Arabic: مرحبا بالعالم")
+            finally:
+                # Cleanup file handlers to prevent Windows permission issues
+                logger_system.cleanup()
 
             # Read the file and verify Unicode was preserved
             log_content = temp_log_path.read_text(encoding='utf-8')

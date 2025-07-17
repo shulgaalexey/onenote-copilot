@@ -65,6 +65,7 @@ class OneNoteCLI:
             '/help': self._show_help,
             '/notebooks': self._list_notebooks,
             '/recent': self._show_recent_pages,
+            '/content': self._show_page_content,
             '/starters': self._show_conversation_starters,
             '/clear': self._clear_history,
             '/quit': self._quit_chat,
@@ -236,12 +237,17 @@ class OneNoteCLI:
         Returns:
             True to continue chat loop, False to exit
         """
-        command = command.strip().lower()
+        command_parts = command.strip().split(None, 1)  # Split into command and parameters
+        command_name = command_parts[0].lower()
+        command_args = command_parts[1] if len(command_parts) > 1 else ""
 
-        if command in self.commands:
-            return await self.commands[command]()
+        # Handle commands with arguments
+        if command_name == '/content':
+            return await self._show_page_content(command_args)
+        elif command_name in self.commands:
+            return await self.commands[command_name]()
         else:
-            self.console.print(f"[red]❌ Unknown command: {command}[/red]")
+            self.console.print(f"[red]❌ Unknown command: {command_name}[/red]")
             self.console.print("💡 Type [cyan]/help[/cyan] for available commands.")
             return True
 
@@ -293,6 +299,48 @@ class OneNoteCLI:
 
         except Exception as e:
             self.console.print(f"[red]ERROR: Failed to get recent pages: {e}[/red]")
+            import traceback
+            self.console.print(f"[dim]Traceback: {traceback.format_exc()}[/dim]")
+            return True
+
+    @logged
+    async def _show_page_content(self, title: str = "") -> bool:
+        """
+        Show the content of a OneNote page by title.
+
+        Args:
+            title: Title of the page to display content for
+
+        Returns:
+            True to continue chat loop
+        """
+        try:
+            # Check if title is provided
+            if not title.strip():
+                self.console.print("[yellow]📝 Usage: /content <page_title>[/yellow]")
+                self.console.print("[dim]Example: /content Meeting Notes[/dim]")
+                return True
+
+            title = title.strip()
+
+            with self.console.status(f"[bold blue]Getting content for '{title}'...", spinner="dots"):
+                # Add debug information
+                self.console.print(f"[dim]DEBUG: Searching for page with title: {title}[/dim]")
+                page = await self.agent.get_page_content_by_title(title)
+                self.console.print(f"[dim]DEBUG: Page found: {page is not None}[/dim]")
+
+            if page:
+                # Format and display the page content
+                content_panel = self.formatter.format_page_content(page)
+                self.console.print(content_panel)
+            else:
+                self.console.print(f"[yellow]📄 No page found with title: '{title}'[/yellow]")
+                self.console.print("[dim]💡 Try using a partial title or check the exact spelling[/dim]")
+
+            return True
+
+        except Exception as e:
+            self.console.print(f"[red]ERROR: Failed to get page content: {e}[/red]")
             import traceback
             self.console.print(f"[dim]Traceback: {traceback.format_exc()}[/dim]")
             return True

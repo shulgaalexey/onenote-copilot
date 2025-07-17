@@ -401,6 +401,7 @@ Just type your questions naturally! Examples:
 - **`/help`** - Show this help message
 - **`/notebooks`** - List all your OneNote notebooks
 - **`/recent`** - Show recently modified pages
+- **`/content <title>`** - Display full content of a page by title
 - **`/starters`** - Show example conversation starters
 - **`/clear`** - Clear conversation history
 - **`/quit`** or **`/exit`** - Exit the application
@@ -528,6 +529,51 @@ Search for Python best practices
             content,
             title="[bold blue]Page Details[/bold blue]",
             border_style="blue",
+            padding=(1, 2)
+        )
+
+    def format_page_content(self, page: OneNotePage) -> Panel:
+        """
+        Format the full content of a OneNote page.
+
+        Args:
+            page: OneNote page to format
+
+        Returns:
+            Rich Panel with full page content
+        """
+        # Create header with metadata
+        header = f"""**📄 {page.title}**
+
+**📅 Created:** {page.created_date_time.strftime('%Y-%m-%d %H:%M')}
+**📝 Modified:** {page.last_modified_date_time.strftime('%Y-%m-%d %H:%M')}
+**📚 Notebook:** {page.get_notebook_name()}
+**📁 Section:** {page.get_section_name()}
+
+---
+
+"""
+
+        # Add content
+        if page.text_content:
+            content_text = page.text_content.strip()
+            # Limit content length for display
+            if len(content_text) > 5000:
+                content_text = content_text[:5000] + "\n\n... [Content truncated - showing first 5000 characters] ..."
+        else:
+            content_text = "*No content available*"
+
+        full_content = header + content_text
+
+        if self.enable_markdown:
+            content = Markdown(full_content)
+        else:
+            content = Text(full_content)
+
+        return Panel(
+            content,
+            title=f"[bold green]📄 Page Content[/bold green]",
+            border_style="green",
             padding=(1, 2)
         )
 

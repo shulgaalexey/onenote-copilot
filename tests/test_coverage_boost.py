@@ -79,12 +79,16 @@ class TestSimpleUtilities:
 
     def test_setup_logging_basic_call(self):
         """Test setup_logging function basic functionality."""
-        from src.main import setup_logging
+        from src.config.logging import setup_logging
 
         # Should not raise exception when called
-        with patch('src.main.logging.basicConfig'):
-            setup_logging(debug=False)
-            setup_logging(debug=True)
+        try:
+            setup_logging(console_level="INFO")
+            setup_logging(console_level="DEBUG")
+            # If we get here, the function worked
+            assert True
+        except Exception as e:
+            pytest.fail(f"setup_logging failed: {e}")
 
 
 class TestDependencyCheckBasics:

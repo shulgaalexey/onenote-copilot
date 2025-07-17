@@ -152,6 +152,15 @@ class OneNoteLogger:
 
             for logger_name, level in external_loggers.items():
                 logging.getLogger(logger_name).setLevel(level)
+        else:
+            # In debug mode, ensure external loggers can inherit DEBUG level
+            external_loggers = [
+                "httpx", "urllib3", "msal", "openai",
+                "langchain", "langgraph", "asyncio"
+            ]
+            for logger_name in external_loggers:
+                # Set to NOTSET so they inherit from root logger (DEBUG)
+                logging.getLogger(logger_name).setLevel(logging.NOTSET)
 
     def get_logger(self, name: str) -> logging.Logger:
         """
@@ -164,6 +173,24 @@ class OneNoteLogger:
             Configured logger instance
         """
         return logging.getLogger(name)
+
+    def cleanup(self) -> None:
+        """
+        Cleanup logging handlers and close files.
+
+        This method is particularly important on Windows where open file
+        handles prevent temporary directories from being cleaned up properly.
+        """
+        root_logger = logging.getLogger()
+
+        # Close and remove all file handlers
+        for handler in root_logger.handlers[:]:  # Copy list to avoid modification during iteration
+            if isinstance(handler, logging.FileHandler):
+                handler.close()
+                root_logger.removeHandler(handler)
+
+        # Reset configuration state
+        self._configured = False
 
 
 # Global logger instance

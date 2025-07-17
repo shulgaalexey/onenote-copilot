@@ -21,6 +21,7 @@ This file tracks all project tasks using a priority-based system optimized for s
 - [x] Update all references from Pydantic AI to LangGraph
 - [x] Create comprehensive PRP for OneNote Copilot CLI implementation
 - [x] Add comprehensive logging system to project with file output and clean startup
+- [x] Add /content command to display OneNote page content by title
 - [ ] Improve test coverage to achieve at least 80% code coverage
 
 ### P-1 (Sooner than Later)
@@ -51,6 +52,14 @@ This file tracks all project tasks using a priority-based system optimized for s
 - [x] Add logging configuration to settings
 - [x] Create comprehensive test suite for logging system
 - [x] Add logging documentation and usage examples
+- [x] Add /content command to display OneNote page content by title
+- [x] Implement OneNoteSearchTool.get_page_content_by_title method
+- [x] Add OneNoteAgent.get_page_content_by_title wrapper method
+- [x] Enhance CLI interface with parameter parsing for commands
+- [x] Create CLIFormatter.format_page_content for beautiful display
+- [x] Write comprehensive test suite with 16 test cases
+- [x] Update help documentation and README for new command
+- [x] Add proper logging and error handling throughout
 
 ### July 15, 2025
 - [x] Complete codebase consistency audit for pip vs uv usage

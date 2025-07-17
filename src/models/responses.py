@@ -8,7 +8,8 @@ including search responses, summaries, and error handling.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (BaseModel, ConfigDict, Field, field_validator,
+                      model_validator)
 
 from .onenote import OneNotePage, SearchResult
 
@@ -33,11 +34,11 @@ class OneNoteSearchResponse(BaseModel):
     reasoning: Optional[str] = Field(None, description="AI reasoning process for debugging")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Additional response metadata")
 
-    class Config:
-        """Pydantic configuration."""
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
         }
+    )
 
     @field_validator('answer')
     @classmethod
@@ -132,11 +133,11 @@ class OneNoteCommandResponse(BaseModel):
     data: Optional[Dict[str, Any]] = Field(None, description="Command result data")
     error: Optional[str] = Field(None, description="Error message if command failed")
 
-    class Config:
-        """Pydantic configuration."""
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
         }
+    )
 
     @classmethod
     def success_response(cls, command: str, message: str, data: Optional[Dict[str, Any]] = None) -> 'OneNoteCommandResponse':
@@ -191,11 +192,11 @@ class StreamingChunk(BaseModel):
     is_final: bool = Field(default=False, description="Whether this is the final chunk")
     timestamp: datetime = Field(default_factory=lambda: datetime.now(), description="Chunk timestamp")
 
-    class Config:
-        """Pydantic configuration."""
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
         }
+    )
 
     @classmethod
     def text_chunk(cls, content: str, is_final: bool = False) -> 'StreamingChunk':
@@ -245,7 +246,7 @@ class StreamingChunk(BaseModel):
         return cls(
             type="sources",
             content=f"Found {len(sources)} relevant pages",
-            metadata={"sources": [page.dict() for page in sources]}
+            metadata={"sources": [page.model_dump() for page in sources]}
         )
 
     @classmethod
@@ -279,11 +280,11 @@ class AgentState(BaseModel):
     context: Dict[str, Any] = Field(default_factory=dict, description="Agent context")
     step_count: int = Field(default=0, description="Number of processing steps")
 
-    class Config:
-        """Pydantic configuration."""
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
         }
+    )
 
     def add_message(self, role: str, content: str) -> None:
         """

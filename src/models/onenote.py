@@ -8,7 +8,7 @@ Includes validation, serialization, and data transformation utilities.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import (BaseModel, Field, HttpUrl, field_validator,
+from pydantic import (BaseModel, ConfigDict, Field, HttpUrl, field_validator,
                       model_validator)
 
 
@@ -30,13 +30,13 @@ class OneNoteNotebook(BaseModel):
     section_groups_url: Optional[HttpUrl] = Field(None, alias="sectionGroupsUrl")
     links: Dict[str, Any] = Field(default_factory=dict)
 
-    class Config:
-        """Pydantic configuration."""
-        populate_by_name = True
-        json_encoders = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
             datetime: lambda v: v.isoformat(),
             HttpUrl: str
         }
+    )
 
 
 class OneNoteSection(BaseModel):
@@ -55,13 +55,13 @@ class OneNoteSection(BaseModel):
     parent_notebook: Optional[Dict[str, Any]] = Field(None, alias="parentNotebook")
     parent_section_group: Optional[Dict[str, Any]] = Field(None, alias="parentSectionGroup")
 
-    class Config:
-        """Pydantic configuration."""
-        populate_by_name = True
-        json_encoders = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
             datetime: lambda v: v.isoformat(),
             HttpUrl: str
         }
+    )
 
 
 class OneNotePage(BaseModel):
@@ -84,13 +84,13 @@ class OneNotePage(BaseModel):
     parent_section: Optional[Dict[str, Any]] = Field(None, alias="parentSection")
     parent_notebook: Optional[Dict[str, Any]] = Field(None, alias="parentNotebook")
 
-    class Config:
-        """Pydantic configuration."""
-        populate_by_name = True
-        json_encoders = {
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
             datetime: lambda v: v.isoformat(),
             HttpUrl: str
         }
+    )
 
     @field_validator('title', mode='before')
     @classmethod
@@ -166,11 +166,11 @@ class SearchResult(BaseModel):
     execution_time: Optional[float] = Field(None, description="Search execution time in seconds")
     api_calls_made: int = Field(default=0, description="Number of API calls made")
 
-    class Config:
-        """Pydantic configuration."""
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat()
         }
+    )
 
     @model_validator(mode='after')
     def set_total_count(self) -> 'SearchResult':

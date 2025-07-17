@@ -29,20 +29,20 @@ class TestAuthenticationFileOperations:
         cache_content = '{"access_token": "test_token"}'
 
         with patch('builtins.open', mock_open(read_data=cache_content)):
-            with patch.object(mock_settings.token_cache_path, 'exists', return_value=True):
+            with patch('pathlib.Path.exists', return_value=True):
                 auth = MicrosoftAuthenticator(mock_settings)
-                cache = auth._load_token_cache()
+                cache = auth._get_token_cache()
 
                 # Verify cache was created
                 assert cache is not None
 
     def test_load_token_cache_file_read_error(self, mock_settings):
         """Test loading token cache when file read fails."""
-        with patch.object(mock_settings.token_cache_path, 'exists', return_value=True):
+        with patch('pathlib.Path.exists', return_value=True):
             with patch('builtins.open', side_effect=IOError("File read error")):
                 with patch('src.auth.microsoft_auth.logger') as mock_logger:
                     auth = MicrosoftAuthenticator(mock_settings)
-                    cache = auth._load_token_cache()
+                    cache = auth._get_token_cache()
 
                     # Verify warning was logged
                     mock_logger.warning.assert_called()
@@ -50,9 +50,9 @@ class TestAuthenticationFileOperations:
 
     def test_load_token_cache_file_not_exists(self, mock_settings):
         """Test loading token cache when file doesn't exist."""
-        with patch.object(mock_settings.token_cache_path, 'exists', return_value=False):
+        with patch('pathlib.Path.exists', return_value=False):
             auth = MicrosoftAuthenticator(mock_settings)
-            cache = auth._load_token_cache()
+            cache = auth._get_token_cache()
 
             # Verify cache was still created
             assert cache is not None
@@ -68,7 +68,7 @@ class TestAuthenticationFileOperations:
         auth.app = mock_app
 
         with patch('builtins.open', mock_open()) as mock_file:
-            with patch.object(mock_settings.token_cache_path.parent, 'mkdir'):
+            with patch('pathlib.Path.mkdir'):
                 auth._save_token_cache()
 
                 # Verify file was written

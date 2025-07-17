@@ -73,7 +73,7 @@ class TestOneNoteNotebook:
 
         # Test that we can access both alias and field names
         assert notebook.display_name == "Alias Test"
-        assert notebook.dict()["display_name"] == "Alias Test"
+        assert notebook.model_dump()["display_name"] == "Alias Test"
 
     def test_notebook_json_serialization(self):
         """Test JSON serialization with datetime encoding."""
@@ -86,7 +86,7 @@ class TestOneNoteNotebook:
         }
 
         notebook = OneNoteNotebook(**data)
-        json_data = notebook.dict()
+        json_data = notebook.model_dump()
 
         # Verify datetime is properly handled
         assert "created_date_time" in json_data

@@ -13,7 +13,7 @@ class TestAgentSimpleCoverage:
 
     def test_agent_initialization_basic(self):
         """Test basic agent initialization."""
-        with patch('src.agents.onenote_agent.AzureChatOpenAI') as mock_llm:
+        with patch('src.agents.onenote_agent.ChatOpenAI') as mock_llm:
             agent = OneNoteAgent()
             assert agent is not None
             assert hasattr(agent, 'llm')
@@ -26,47 +26,47 @@ class TestAgentSimpleCoverage:
         mock_settings.azure_openai_deployment_name = "test_deployment"
         mock_settings.azure_openai_api_version = "test_version"
 
-        with patch('src.agents.onenote_agent.AzureChatOpenAI') as mock_llm:
+        with patch('src.agents.onenote_agent.ChatOpenAI') as mock_llm:
             agent = OneNoteAgent(settings=mock_settings)
             assert agent is not None
 
     def test_needs_tool_call_basic(self):
         """Test needs_tool_call method with basic scenarios."""
-        with patch('src.agents.onenote_agent.AzureChatOpenAI'):
+        with patch('src.agents.onenote_agent.ChatOpenAI'):
             agent = OneNoteAgent()
 
             # Test with query that needs search
-            assert agent.needs_tool_call("search for project notes") == True
-            assert agent.needs_tool_call("find my meeting notes") == True
+            assert agent._needs_tool_call("search for project notes") == True
+            assert agent._needs_tool_call("find my meeting notes") == True
 
             # Test with query that doesn't need search
-            assert agent.needs_tool_call("hello") == False
-            assert agent.needs_tool_call("what is onenote") == False
+            assert agent._needs_tool_call("hello") == False
+            assert agent._needs_tool_call("what is onenote") == False
 
     def test_extract_tool_info_basic(self):
         """Test extract_tool_info method."""
-        with patch('src.agents.onenote_agent.AzureChatOpenAI'):
+        with patch('src.agents.onenote_agent.ChatOpenAI'):
             agent = OneNoteAgent()
 
             # Test search query extraction
             query = "search for project notes"
-            tool_name, search_query = agent.extract_tool_info(query)
-            assert tool_name == "search_pages"
-            assert "project notes" in search_query
+            result = agent._extract_tool_info(query)
+            assert result["tool"] == "search_onenote"
+            assert "project notes" in result["query"]
 
             # Test recent pages extraction
             query = "show me recent pages"
-            tool_name, search_query = agent.extract_tool_info(query)
-            assert tool_name == "get_recent_pages"
+            result = agent._extract_tool_info(query)
+            assert result["tool"] == "get_recent_pages"
 
             # Test notebooks extraction
             query = "list my notebooks"
-            tool_name, search_query = agent.extract_tool_info(query)
-            assert tool_name == "get_notebooks"
+            result = agent._extract_tool_info(query)
+            assert result["tool"] == "get_notebooks"
 
     def test_extract_tool_info_notebooks_keywords(self):
         """Test extract_tool_info with various notebook keywords."""
-        with patch('src.agents.onenote_agent.AzureChatOpenAI'):
+        with patch('src.agents.onenote_agent.ChatOpenAI'):
             agent = OneNoteAgent()
 
             # Test different notebook keywords
@@ -78,12 +78,12 @@ class TestAgentSimpleCoverage:
             ]
 
             for query in queries:
-                tool_name, _ = agent.extract_tool_info(query)
-                assert tool_name == "get_notebooks"
+                result = agent._extract_tool_info(query)
+                assert result["tool"] == "get_notebooks"
 
     def test_extract_tool_info_recent_pages_keywords(self):
         """Test extract_tool_info with various recent pages keywords."""
-        with patch('src.agents.onenote_agent.AzureChatOpenAI'):
+        with patch('src.agents.onenote_agent.ChatOpenAI'):
             agent = OneNoteAgent()
 
             # Test different recent pages keywords
@@ -95,5 +95,5 @@ class TestAgentSimpleCoverage:
             ]
 
             for query in queries:
-                tool_name, _ = agent.extract_tool_info(query)
-                assert tool_name == "get_recent_pages"
+                result = agent._extract_tool_info(query)
+                assert result["tool"] == "get_recent_pages"

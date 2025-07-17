@@ -24,7 +24,28 @@ logger = logging.getLogger(__name__)
 
 class OneNoteSearchError(Exception):
     """Exception raised when OneNote search operations fail."""
-    pass
+
+    def __init__(self, message: str, status_code: Optional[int] = None, response_data: Optional[Dict[str, Any]] = None):
+        """
+        Initialize OneNoteSearchError with optional context.
+
+        Args:
+            message: Error message
+            status_code: Optional HTTP status code
+            response_data: Optional response data from API
+        """
+        super().__init__(message)
+        self.status_code = status_code
+        self.response_data = response_data
+
+    def __repr__(self) -> str:
+        """Return detailed string representation of error."""
+        parts = [f"OneNoteSearchError('{self.args[0]}'"]
+        if self.status_code:
+            parts.append(f"status_code={self.status_code}")
+        if self.response_data:
+            parts.append(f"response_data={self.response_data}")
+        return ", ".join(parts) + ")"
 
 
 class OneNoteSearchTool:
@@ -626,6 +647,86 @@ class OneNoteSearchTool:
         except Exception as e:
             logger.error(f"Failed to get notebooks: {e}")
             raise OneNoteSearchError(f"Failed to get notebooks: {e}")
+
+    @logged
+    async def get_page_content_by_title(self, title: str) -> Optional[OneNotePage]:
+        """
+        Get full content of a OneNote page by its title.
+
+        Args:
+            title: Title of the page to retrieve
+
+        Returns:
+            OneNotePage with full content if found, None otherwise
+
+        Raises:
+            OneNoteSearchError: If operation fails
+        """
+        try:
+            # First, search for pages with matching title
+            result = await self.search_pages(title, max_results=20)
+
+            if not result.pages:
+                logger.info(f"No pages found with title containing: {title}")
+                return None
+
+            # Find exact title match (case-insensitive)
+            title_lower = title.lower().strip()
+            exact_matches = [
+                page for page in result.pages
+                if page.title.lower().strip() == title_lower
+            ]
+
+            # If no exact match, find best partial match
+            if not exact_matches:
+                partial_matches = [
+                    page for page in result.pages
+                    if title_lower in page.title.lower()
+                ]
+
+                if not partial_matches:
+                    logger.info(f"No pages found matching title: {title}")
+                    return None
+
+                # Use the first partial match
+                target_page = partial_matches[0]
+                logger.info(f"Using partial match: '{target_page.title}' for query: '{title}'")
+            else:
+                # Use exact match
+                target_page = exact_matches[0]
+                logger.info(f"Found exact match: '{target_page.title}'")
+
+            # Fetch full content if not already loaded
+            if not target_page.content or not target_page.text_content:
+                token = await self.authenticator.get_valid_token()
+                content, _ = await self._fetch_page_content(target_page.id, token)
+
+                if content:
+                    target_page.content = content
+                    target_page.text_content = self._extract_text_from_html(content)
+                    logger.info(f"Successfully fetched content for page: {target_page.title}")
+                else:
+                    logger.warning(f"Failed to fetch content for page: {target_page.title}")
+
+            return target_page
+
+        except Exception as e:
+            logger.error(f"Failed to get page content by title '{title}': {e}")
+            raise OneNoteSearchError(f"Failed to get page content: {e}")
+
+    async def ensure_authenticated(self) -> bool:
+        """
+        Ensure that the user is properly authenticated.
+
+        Returns:
+            True if authentication is successful, False otherwise
+        """
+        try:
+            token = await self.authenticator.get_valid_token()
+            return token is not None and token.strip() != ""
+        except Exception as e:
+            logger.error(f"Authentication check failed: {e}")
+            return False
 
 
 if __name__ == "__main__":

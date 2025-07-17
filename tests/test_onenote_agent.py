@@ -527,29 +527,38 @@ class TestPublicMethods:
 
     async def test_list_notebooks(self):
         """Test listing notebooks."""
-        # Mock the notebooks node
-        self.agent._get_notebooks_node = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.messages = [AIMessage(content="NOTEBOOKS: Test response")]
-        self.agent._get_notebooks_node.return_value = mock_response
+        # Mock the search tool directly
+        mock_notebooks = [{"id": "1", "name": "Test Notebook"}]
+        self.agent.search_tool.get_notebooks = AsyncMock(return_value=mock_notebooks)
 
         result = await self.agent.list_notebooks()
 
-        # Should return list (simplified implementation)
+        # Should return list from search tool
         assert isinstance(result, list)
+        assert result == mock_notebooks
 
     async def test_get_recent_pages(self):
         """Test getting recent pages."""
-        # Mock the recent pages node
-        self.agent._get_recent_pages_node = AsyncMock()
-        mock_response = MagicMock()
-        mock_response.messages = [AIMessage(content="RECENT_PAGES: Test response")]
-        self.agent._get_recent_pages_node.return_value = mock_response
+        # Mock the search tool directly
+        from datetime import datetime
+
+        from src.models.onenote import OneNotePage
+        mock_page = OneNotePage(
+            id="test-id",
+            title="Test Page",
+            content="Test content",
+            createdDateTime=datetime.fromisoformat("2023-01-01T00:00:00+00:00"),
+            lastModifiedDateTime=datetime.fromisoformat("2023-01-01T00:00:00+00:00"),
+            links={}
+        )
+        mock_pages = [mock_page]
+        self.agent.search_tool.get_recent_pages = AsyncMock(return_value=mock_pages)
 
         result = await self.agent.get_recent_pages(5)
 
-        # Should return list (simplified implementation)
+        # Should return list from search tool
         assert isinstance(result, list)
+        assert result == mock_pages
 
     async def test_stream_query_alias(self):
         """Test stream_query alias method."""

@@ -661,6 +661,37 @@ class OneNoteAgent:
             # Return empty list instead of raising to prevent CLI crashes
             return []
 
+    @logged
+    async def get_page_content_by_title(self, title: str) -> Optional[OneNotePage]:
+        """
+        Get the full content of a OneNote page by its title.
+
+        Args:
+            title: Title of the page to retrieve
+
+        Returns:
+            OneNotePage with full content if found, None otherwise
+
+        Raises:
+            Exception: If operation fails
+        """
+        try:
+            # Ensure we have a valid authenticator and search tool
+            if not self.search_tool:
+                raise Exception("Search tool not initialized")
+
+            page = await self.search_tool.get_page_content_by_title(title)
+            if page:
+                logger.info(f"Retrieved content for page: {page.title}")
+            else:
+                logger.info(f"No page found with title: {title}")
+
+            return page
+
+        except Exception as e:
+            logger.error(f"Failed to get page content by title '{title}': {e}")
+            raise Exception(f"Failed to get page content: {e}")
+
     async def stream_query(self, query: str) -> AsyncGenerator[StreamingChunk, None]:
         """Alias for process_query to match test expectations."""
         async for chunk in self.process_query(query):

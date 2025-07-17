@@ -85,7 +85,7 @@ onenote-copilot/
 .\.venv\Scripts\Activate.ps1
 
 # Development
-python -m pytest tests/ -v                 # Run tests
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"                 # Run tests with TEST_RUN.md tracking
 ruff check --fix; mypy .                   # Lint and type check
 python -m src.main                          # Run main application
 
@@ -106,6 +106,62 @@ pip freeze > requirements.txt              # Update requirements file
   - Edge case test
   - Failure case test
 
+### 🚨 MANDATORY: TEST_RUN.md Testing Approach
+**ALL test execution MUST follow this pattern to prevent premature command execution:**
+
+#### Required Test Command
+```powershell
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+#### Critical Rules
+1. **ALWAYS redirect pytest output to `TEST_RUN.md`** - never run tests without this redirection
+2. **WAIT for `%TESTS FINISHED%` marker** - this indicates test completion
+3. **NEVER proceed to next command** until you see the completion marker
+
+### 🗂️ File Deletion Tracking Protocol
+**🚨 CRITICAL PRACTICE - MANDATORY FOR ALL FILE DELETIONS 🚨**
+
+#### Before Deleting Any File:
+1. **REQUIRED**: Add entry to `DEL_FILES.md` before deletion
+2. **Include**: Full file path, deletion reason, context, and date
+3. **Follow**: The template format provided in `DEL_FILES.md`
+4. **Purpose**: Maintain audit trail and enable file recovery
+
+#### Entry Template:
+```markdown
+**File Path**: `path/to/file.ext`
+- **Reason**: Brief reason for deletion
+- **Context**: Why file existed and why removing
+- **Deleted by**: [Name/Agent identifier]
+- **Date**: YYYY-MM-DD
+```
+
+#### Why This Matters:
+- **Audit Trail**: Track all file removals and decisions
+- **Project History**: Understand evolution and changes
+- **Recovery**: Enable restoration of accidentally deleted files
+- **Team Coordination**: Prevent confusion about missing files
+- **Documentation**: Record decision-making process
+
+**NEVER delete without logging in DEL_FILES.md first!**
+
+#### Test Execution Workflow
+1. **Execute command**: Run the exact PowerShell command above
+2. **Monitor file**: Periodically check `TEST_RUN.md` contents for progress
+3. **Wait for marker**: Look for `%TESTS FINISHED%` at file end
+4. **Analyze results**: Review test outcomes only after seeing completion marker
+5. **Take action**: Fix failures or proceed based on complete results
+
+#### Troubleshooting Long-Running Tests
+```powershell
+# Check current test progress
+Get-Content TEST_RUN.md -Tail 10
+
+# Run individual test files if needed
+python -m pytest tests/test_specific.py -v > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
 ### Code Quality
 - **Formatting**: Use `black` for code formatting
 - **Linting**: `ruff` for style and error checking
@@ -119,8 +175,8 @@ All code must pass these checks before merge:
 ruff check --fix
 mypy .
 
-# Tests
-python -m pytest tests/ -v --cov=src --cov-report=term-missing
+# Tests - MANDATORY TEST_RUN.md approach
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
 
 # Integration (if applicable)
 # Manual testing of main workflows

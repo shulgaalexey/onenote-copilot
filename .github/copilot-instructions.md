@@ -44,8 +44,9 @@ pip freeze > requirements.txt               # Update requirements after adding p
 
 # Quality Checks
 ruff check --fix; mypy .                    # Lint and type check
-python -m pytest tests/ -v                  # Run tests
-python -m pytest tests/ --cov=src --cov-report=term-missing  # Tests with coverage
+# Development
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Run tests with TEST_RUN.md tracking
+python -m pytest tests/ --cov=src --cov-report=term-missing --cov-report=html > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Tests with coverage and HTML report
 
 # Application
 python -m src.main                          # Run main application (future)
@@ -71,9 +72,53 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 - **Types**: Include unit tests, integration tests, and end-to-end tests
 - **Pattern**: Each feature needs happy path, edge case, and failure tests
 
+
+### 📝 Test Output Tracking
+**🚨 MANDATORY TESTING APPROACH - NEVER SKIP THIS**:
+- **ALWAYS use `TEST_RUN.md` for ANY test execution** - this includes unit tests, integration tests, debugging tests, ad-hoc tests, or ANY Python script execution that could take time
+- **NEVER run tests directly in terminal without output redirection** - this leads to incomplete execution tracking
+- **When running tests, save the output in a `TEST_RUN.md` file** at the project root (ensure each trace line is started with the current timestamp).
+- **Overwrite this file on each test run** - it's a temporary tracking file.
+- **When tests finish, append the line `%TESTS FINISHED%`** to mark completion.
+- **Monitor this file and never proceed to the next step** until you see this marker.
+- **Maximum wait time: 5 minutes** - if tests don't complete within this timeframe, investigate or abort.
+- **Use this approach for ALL test runs** to ensure proper completion tracking.
+- **NO EXCEPTIONS**: Even simple Python scripts, import tests, or debugging code MUST use this approach if they could take more than a few seconds
+
+Example PowerShell command for test tracking:
+```powershell
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+**CRITICAL EXAMPLES OF WHAT REQUIRES TEST_RUN.md**:
+- `python -m pytest` (any pytest command)
+- `python test_something.py` (any test script)
+- `python -c "import complex_module; complex_module.test()"` (any import or code execution)
+- `python app.py` (any application startup)
+- `python -m src.main` (any module execution)
+
+**WHY THIS IS CRITICAL**: This prevents Copilot Agent from jumping to the next command before tests finish. Tests often take time to start up, and the Agent must be patient and wait for the completion marker rather than abandoning the test session.
+
+Use the `TEST_RUN.md` file content to fix failing tests if any.
+
+**ABSOLUTELY FORBIDDEN**:
+- Running tests directly in terminal without `> TEST_RUN.md 2>&1`
+- Using `sleep` or `timeout` commands to wait for tests
+- Creating ad-hoc test files and running them without TEST_RUN.md tracking
+- Proceeding to next steps without seeing `%TESTS FINISHED%` marker
+
+Also when running the app in the terminal. **IT TAKES TIME TO START THE APP!!!**
+
+
 ### ✅ Task Completion
 - **Mark completed tasks in `TASK.md`** immediately after finishing them.
 - Add new sub-tasks or TODOs discovered during development to `TASK.md` under a "Discovered During Work" section.
+
+
+### Deleting temporary files
+- **Delete temporary files** that you created during troubleshooting
+- **Do not delete files** that are part of the project structure or used by other components
+- **WHEN DELETED**: Add a note in `DEL.md` and `PROGRESS.md` stating what was deleted and why
 
 ### 🎨 Style & Conventions
 - **Use Python** as the primary language (3.11+).
@@ -104,11 +149,71 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 - **Error Handling**: Implement graceful error handling and recovery
 - **Validation**: Use Pydantic models for all inputs and outputs
 
+### 🖥️ Chat CLI Development Guidelines
+- **Async Operations**: Use Python's `asyncio` for all asynchronous operations, including API calls and user input handling
+- **Rich UI Library**: Integrate the `rich` library for enhanced command-line formatting:
+  - Use `rich.panel.Panel` for bordered content sections
+  - Use `rich.markdown.Markdown` for formatted text rendering
+  - Use `rich.live.Live` for real-time updates and streaming responses
+  - Use `rich.console.Console` for consistent output formatting
+- **Chat Commands**: Implement standardized chat commands with `/` prefix:
+  - `/help` - Display available commands and usage instructions
+  - `/reset` - Clear current conversation and start fresh
+  - `/history` - Show conversation history with timestamps
+  - `/session` - Display current session information and statistics
+  - `/starters` - Show conversation starter suggestions
+  - `/quit` or `/exit` - Gracefully terminate the application
+- **Welcome Experience**: Create rich-styled welcome messages:
+  - Use headers and panels to introduce the application
+  - Display available commands and features clearly
+  - Include version information and basic usage tips
+- **Live Display**: Implement dynamic response streaming:
+  - Use `rich.live.Live` for real-time content updates
+  - Show typing indicators during API calls
+  - Stream responses character-by-character for natural feel
+- **Session Management**: Track and manage conversation state:
+  - Maintain conversation history with metadata
+  - Implement session reset functionality
+  - Provide session statistics (message count, duration, etc.)
+  - Save/load session data for persistence
+- **Error Handling**: Handle common CLI interruptions gracefully:
+  - Catch `KeyboardInterrupt` (Ctrl+C) for clean shutdown
+  - Handle `EOFError` for input stream termination
+  - Provide user-friendly error messages with recovery suggestions
+  - Implement fallback mechanisms for API failures
+
 ### 🚫 Do Not Touch
 - **Legacy Code**: Don't modify working implementations without explicit requirements
 - **Generated Files**: Don't manually edit auto-generated configuration files
 - **External Dependencies**: Don't modify external library code directly
 - **Git History**: Don't rewrite commit history on shared branches
+
+### 🗂️ File Deletion Tracking
+**🚨 CRITICAL PRACTICE - NEVER SKIP THIS STEP 🚨**
+
+Before deleting ANY file in the repository:
+1. **MANDATORY**: Add the file to `DEL_FILES.md` with deletion details
+2. **Include**: Full file path, reason for deletion, date, and context
+3. **Template**: Follow the template provided in `DEL_FILES.md`
+4. **Purpose**: Maintain project history and enable recovery if needed
+
+**Example entry format:**
+```markdown
+**File Path**: `tests/test_example.py`
+- **Reason**: Failing tests due to outdated mocking approach
+- **Context**: Replaced with simpler test implementation
+- **Deleted by**: [Your name/Agent]
+- **Date**: YYYY-MM-DD
+```
+
+**Why this matters:**
+- Provides audit trail for deleted files
+- Helps understand project evolution
+- Enables recovery of accidentally deleted files
+- Documents decision-making process
+- Prevents confusion about missing files
+
+**NEVER delete a file without logging it in DEL_FILES.md first!**
 
 ### 🔧 Environment Variables
 - **Development**: Use `.env.local` file (gitignored)
@@ -122,7 +227,7 @@ Before any commit or pull request:
 # Must pass all of these checks
 ruff check --fix                            # Code formatting and linting
 mypy .                                       # Type checking
-python -m pytest tests/ -v --cov=src --cov-report=term-missing  # Testing with coverage
+python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Testing with coverage using TEST_RUN.md approach
 ```
 
 ### 📚 Documentation & Explainability
@@ -134,7 +239,7 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing  # Testing with c
 ### 🔧 Troubleshooting
 - **Virtual Environment Issues**: Ensure PowerShell execution policy allows script execution. Use `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` if needed
 - **Package Management Issues**: Use `pip` for reliable dependency management. Clear pip cache with `pip cache purge` if installation issues occur
-- **Testing Issues**: Run tests with `-v` flag for verbose output. Use `--pdb` flag to drop into debugger on test failures
+- **Testing Issues**: Use TEST_RUN.md approach for verbose output: `python -m pytest tests/ -v > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"`. Use `--pdb` flag to drop into debugger on test failures
 
 ### 🧠 AI Behavior Rules
 - **Never assume missing context. Ask questions if uncertain.**
@@ -153,3 +258,33 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing  # Testing with c
 - **Packaging**: Use modern Python packaging with `pyproject.toml`
 - **Dependencies**: Pin exact versions for reproducible builds
 - **Scripts**: All deployment scripts must be PowerShell compatible
+
+**🚨 LEARN FROM RECENT VIOLATIONS 🚨**
+
+**Case Study - July 16, 2025**: During query processing fix, the Agent created ad-hoc test files (`test_query_fix.py`, `simple_test.py`) and ran them directly in terminal without TEST_RUN.md redirection. This violated the mandatory testing protocol and could have led to missed failures or incomplete execution tracking.
+
+**What was done wrong:**
+- Created temporary test files without proper execution tracking
+- Ran `python test_query_fix.py` directly in terminal
+- Lost patience when import seemed stuck and abandoned proper approach
+- Proceeded to next steps without completion confirmation
+
+**Why this was dangerous:**
+- Could miss critical test failures
+- No execution tracking or debugging information
+- Sets bad precedent for future development
+- Violates established project protocols
+
+**Correct approach for ANY Python execution:**
+```powershell
+# Even for simple scripts - ALWAYS use TEST_RUN.md
+python test_query_fix.py > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+
+# Monitor progress
+Get-Content TEST_RUN.md -Tail 5
+
+# Wait for completion
+Select-String -Path TEST_RUN.md -Pattern "%TESTS FINISHED%"
+```
+
+**NEVER AGAIN**: Any Python script execution that could take time MUST use TEST_RUN.md approach.

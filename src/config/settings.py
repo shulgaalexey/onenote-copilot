@@ -170,7 +170,7 @@ class Settings(BaseSettings):
         description="ChromaDB collection name for OneNote content"
     )
     semantic_search_threshold: float = Field(
-        default=0.75,
+        default=0.6,
         description="Minimum similarity threshold for semantic search",
         ge=0.0,
         le=1.0

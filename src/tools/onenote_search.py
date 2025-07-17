@@ -115,14 +115,10 @@ class OneNoteSearchTool:
                 logger.debug(f"Extracted subject from thought query: '{subject}'")
                 return subject
 
-        # Remove common question words at the beginning
+        # Remove only very specific question words at the beginning - be more conservative
         question_patterns = [
-            r'^what\s+(did\s+i\s+)?',
-            r'^where\s+(did\s+i\s+)?',
-            r'^when\s+(did\s+i\s+)?',
-            r'^how\s+(did\s+i\s+)?',
             r'^show\s+me\s+',
-            r'^find\s+',
+            r'^find\s+me\s+',
             r'^search\s+for\s+',
             r'^look\s+for\s+'
         ]
@@ -130,11 +126,10 @@ class OneNoteSearchTool:
         for pattern in question_patterns:
             query = re.sub(pattern, '', query, flags=re.IGNORECASE)
 
-        # Remove common filler words
-        filler_words = ['about', 'on', 'regarding', 'concerning', 'related to']
-        for word in filler_words:
-            # Only remove if it's at the beginning or preceded by whitespace
-            query = re.sub(rf'\b{re.escape(word)}\b\s*', '', query, flags=re.IGNORECASE)
+        # Only remove filler words if they're not part of the main content
+        # Be more selective about word removal to preserve semantic meaning
+        if query.startswith('about '):
+            query = query[6:]  # Remove 'about ' from start only
 
         # Clean up extra whitespace
         query = re.sub(r'\s+', ' ', query).strip()
@@ -145,6 +140,57 @@ class OneNoteSearchTool:
 
         logger.debug(f"Processed query: '{natural_query}' -> '{query}'")
         return query
+
+    def _generate_query_variations(self, natural_query: str) -> List[str]:
+        """
+        Generate multiple query variations to improve search success.
+
+        Args:
+            natural_query: Original natural language query
+
+        Returns:
+            List of query variations to try
+        """
+        variations = []
+
+        # Always include the original query (cleaned)
+        original = re.sub(r'[?!]', '', natural_query.strip())
+        variations.append(original)
+
+        # Add processed version
+        processed = self._prepare_search_query(natural_query)
+        if processed and processed != original:
+            variations.append(processed)
+
+        # Extract key content words (preserve important terms)
+        import re
+        words = re.findall(r'\b\w+\b', natural_query.lower())
+        content_words = [w for w in words if w not in {
+            'what', 'did', 'i', 'write', 'about', 'the', 'a', 'an', 'and', 'or',
+            'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'
+        }]
+
+        if content_words:
+            # Join content words
+            content_query = ' '.join(content_words)
+            if content_query and content_query not in variations:
+                variations.append(content_query)
+
+            # Try just the last content word (often the main topic)
+            if len(content_words) > 1:
+                last_word = content_words[-1]
+                if last_word not in variations:
+                    variations.append(last_word)
+
+        # Remove empty variations and deduplicate
+        variations = [v for v in variations if v and len(v.strip()) >= 2]
+        unique_variations = []
+        for v in variations:
+            if v not in unique_variations:
+                unique_variations.append(v)
+
+        logger.debug(f"Generated {len(unique_variations)} query variations: {unique_variations}")
+        return unique_variations
 
     async def search_pages(self, query: str, max_results: Optional[int] = None) -> SearchResult:
         """
@@ -198,6 +244,43 @@ class OneNoteSearchTool:
                         pages_data.append(page)
                         if len(pages_data) >= max_results:
                             break
+
+            # If still no results, try query variations
+            if len(pages_data) == 0:
+                logger.debug("No results found, trying query variations")
+                query_variations = self._generate_query_variations(original_query)
+
+                for i, variation in enumerate(query_variations[1:], 1):  # Skip first (already tried)
+                    if len(pages_data) >= max_results:
+                        break
+
+                    logger.debug(f"Trying variation {i}: '{variation}'")
+
+                    # Try title search with variation
+                    var_pages_data, var_api_calls = await self._search_pages_api(variation, token, max_results)
+                    api_calls += var_api_calls
+
+                    # Add new results
+                    existing_ids = {page.get('id') for page in pages_data}
+                    for page in var_pages_data:
+                        if page.get('id') not in existing_ids:
+                            pages_data.append(page)
+
+                    # If we found results, also try content search for this variation
+                    if len(var_pages_data) > 0 and len(pages_data) < max_results:
+                        var_content_pages, var_content_api_calls = await self._search_pages_by_content(variation, token, max_results - len(pages_data))
+                        api_calls += var_content_api_calls
+
+                        for page in var_content_pages:
+                            if page.get('id') not in existing_ids:
+                                pages_data.append(page)
+                                if len(pages_data) >= max_results:
+                                    break
+
+                    # Stop if we found enough results
+                    if len(pages_data) >= 3:  # Found some results
+                        logger.debug(f"Found {len(pages_data)} results with variation '{variation}'")
+                        break
 
             # Convert to OneNotePage models
             pages = []

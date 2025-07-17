@@ -407,7 +407,8 @@ Just type your questions naturally! Examples:
 - **`/quit`** or **`/exit`** - Exit the application
 
 ## Semantic Search Commands
-- **`/index [recent]`** - Index OneNote content for semantic search
+- **`/index`** - Index all OneNote content for semantic search (full indexing)
+- **`/index recent`** - Index only recent OneNote pages for semantic search
 - **`/semantic <query>`** - Perform semantic search on indexed content
 - **`/stats`** - Show semantic search statistics and configuration
 - **`/reset-index`** - Reset the semantic search index (warning: deletes all indexed data)

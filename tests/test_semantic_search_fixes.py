@@ -277,6 +277,138 @@ class TestEndToEndFix:
                 await engine.semantic_search("test query")
 
 
+class TestSemanticSearchIndexPagesUpdates:
+    """Test the updated index_pages method that returns detailed results."""
+
+    @pytest.mark.asyncio
+    async def test_index_pages_returns_detailed_results(self):
+        """Test that index_pages returns detailed statistics."""
+        from src.models.onenote import OneNotePage
+
+        # Mock settings
+        settings = MagicMock()
+        settings.openai_api_key.get_secret_value.return_value = "test-key"
+        settings.semantic_search_limit = 10
+        settings.semantic_search_threshold = 0.7
+
+        # Mock search tool
+        mock_search_tool = MagicMock()
+
+        # Create engine
+        engine = SemanticSearchEngine(mock_search_tool, settings)
+
+        # Mock the index_page method to return different chunk counts
+        engine.index_page = AsyncMock(side_effect=[3, 0, 2])  # Success, failure, success
+
+        # Create test pages
+        pages = [
+            OneNotePage(
+                id="page1",
+                title="Test Page 1",
+                createdDateTime="2025-01-01T10:00:00Z",
+                lastModifiedDateTime="2025-01-02T15:30:00Z"
+            ),
+            OneNotePage(
+                id="page2",
+                title="Test Page 2",
+                createdDateTime="2025-01-01T11:00:00Z",
+                lastModifiedDateTime="2025-01-02T16:30:00Z"
+            ),
+            OneNotePage(
+                id="page3",
+                title="Test Page 3",
+                createdDateTime="2025-01-01T12:00:00Z",
+                lastModifiedDateTime="2025-01-02T17:30:00Z"
+            )
+        ]
+
+        # Test indexing
+        result = await engine.index_pages(pages)
+
+        # Verify the result structure
+        assert isinstance(result, dict)
+        assert 'successful' in result
+        assert 'failed' in result
+        assert 'total_chunks' in result
+        assert 'page_results' in result
+
+        # Verify the counts
+        assert result['successful'] == 2  # Pages 1 and 3 succeeded
+        assert result['failed'] == 1     # Page 2 failed
+        assert result['total_chunks'] == 5  # 3 + 0 + 2 = 5
+        assert len(result['page_results']) == 3
+
+        # Verify page-specific results
+        assert result['page_results']['page1'] == 3
+        assert result['page_results']['page2'] == 0
+        assert result['page_results']['page3'] == 2
+
+    @pytest.mark.asyncio
+    async def test_index_pages_empty_list(self):
+        """Test index_pages with empty page list."""
+        # Mock settings
+        settings = MagicMock()
+        settings.openai_api_key.get_secret_value.return_value = "test-key"
+
+        # Mock search tool
+        mock_search_tool = MagicMock()
+
+        # Create engine
+        engine = SemanticSearchEngine(mock_search_tool, settings)
+
+        # Test with empty list
+        result = await engine.index_pages([])
+
+        # Verify empty result
+        assert result['successful'] == 0
+        assert result['failed'] == 0
+        assert result['total_chunks'] == 0
+        assert result['page_results'] == {}
+
+    @pytest.mark.asyncio
+    async def test_index_pages_all_successful(self):
+        """Test index_pages when all pages are successfully indexed."""
+        from src.models.onenote import OneNotePage
+
+        # Mock settings
+        settings = MagicMock()
+        settings.openai_api_key.get_secret_value.return_value = "test-key"
+
+        # Mock search tool
+        mock_search_tool = MagicMock()
+
+        # Create engine
+        engine = SemanticSearchEngine(mock_search_tool, settings)
+
+        # Mock the index_page method to always succeed
+        engine.index_page = AsyncMock(return_value=2)
+
+        # Create test pages
+        pages = [
+            OneNotePage(
+                id="page1",
+                title="Test Page 1",
+                createdDateTime="2025-01-01T10:00:00Z",
+                lastModifiedDateTime="2025-01-02T15:30:00Z"
+            ),
+            OneNotePage(
+                id="page2",
+                title="Test Page 2",
+                createdDateTime="2025-01-01T11:00:00Z",
+                lastModifiedDateTime="2025-01-02T16:30:00Z"
+            )
+        ]
+
+        # Test indexing
+        result = await engine.index_pages(pages)
+
+        # Verify all succeeded
+        assert result['successful'] == 2
+        assert result['failed'] == 0
+        assert result['total_chunks'] == 4  # 2 pages * 2 chunks each
+        assert len(result['page_results']) == 2
+
+
 if __name__ == "__main__":
     # Run the tests
     pytest.main([__file__, "-v"])

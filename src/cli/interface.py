@@ -507,8 +507,33 @@ Stay organized! 📚✨
                     else:
                         self.console.print("[yellow]📄 No recent pages found to index.[/yellow]")
                 else:
-                    self.console.print("[yellow]📚 Full content indexing not yet implemented in CLI.[/yellow]")
-                    self.console.print("[dim]Use '/index recent' to index recent pages only.[/dim]")
+                    # Full content indexing
+                    self.console.print("[dim]Getting all pages for full indexing...[/dim]")
+
+                    # Get all pages with a reasonable limit to avoid overwhelming the system
+                    all_pages = await self.agent.search_tool.get_all_pages(limit=100)
+
+                    if all_pages:
+                        self.console.print(f"[dim]Found {len(all_pages)} pages. Starting indexing process...[/dim]")
+
+                        # Update the status message for full indexing (no nested status)
+                        self.console.print("[bold green]Indexing all pages (this may take a while)...[/bold green]")
+                        result = await self.agent.semantic_search_engine.index_pages(all_pages)
+
+                        successful = result.get('successful', 0)
+                        failed = result.get('failed', 0)
+                        total_chunks = result.get('total_chunks', 0)
+
+                        self.console.print(f"[green]✅ Full indexing completed![/green]")
+                        self.console.print(f"[green]   • Successfully indexed: {successful} pages[/green]")
+                        if total_chunks > 0:
+                            self.console.print(f"[green]   • Total content chunks: {total_chunks}[/green]")
+                        if failed > 0:
+                            self.console.print(f"[yellow]   • Failed to index: {failed} pages[/yellow]")
+
+                        self.console.print(f"[dim]Your OneNote content is now ready for semantic search![/dim]")
+                    else:
+                        self.console.print("[yellow]📄 No pages found to index.[/yellow]")
 
             return True
 

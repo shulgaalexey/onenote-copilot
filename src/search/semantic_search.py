@@ -303,7 +303,7 @@ class SemanticSearchEngine:
             raise SemanticSearchError(f"Failed to index page: {e}")
 
     @logged("Index multiple OneNote pages")
-    async def index_pages(self, pages: List[OneNotePage]) -> Dict[str, int]:
+    async def index_pages(self, pages: List[OneNotePage]) -> Dict[str, Any]:
         """
         Index multiple OneNote pages for semantic search.
 
@@ -311,16 +311,25 @@ class SemanticSearchEngine:
             pages: List of OneNote pages to index
 
         Returns:
-            Dictionary mapping page IDs to number of chunks indexed
+            Dictionary with indexing results including:
+            - successful: Number of successfully indexed pages
+            - failed: Number of pages that failed to index
+            - total_chunks: Total number of content chunks created
+            - page_results: Mapping of page IDs to chunk counts
 
         Raises:
             SemanticSearchError: If indexing fails
         """
         if not pages:
-            return {}
+            return {
+                'successful': 0,
+                'failed': 0,
+                'total_chunks': 0,
+                'page_results': {}
+            }
 
         start_time = time.time()
-        results = {}
+        page_results = {}
 
         # Index pages in batches to manage memory and API limits
         batch_size = 5  # Process 5 pages at a time
@@ -332,28 +341,37 @@ class SemanticSearchEngine:
             for page in batch:
                 try:
                     chunk_count = await self.index_page(page)
-                    results[page.id] = chunk_count
+                    page_results[page.id] = chunk_count
                 except Exception as e:
                     logger.error(f"Failed to index page '{getattr(page, 'title', 'Unknown')}': {e}")
-                    results[page.id] = 0
+                    page_results[page.id] = 0
 
             # Small delay between batches to respect API limits
             if i + batch_size < len(pages):
                 await asyncio.sleep(0.5)
 
-        total_chunks = sum(results.values())
+        # Calculate summary statistics
+        total_chunks = sum(page_results.values())
+        successful = len([r for r in page_results.values() if r > 0])
+        failed = len([r for r in page_results.values() if r == 0])
 
         log_performance(
             "index_pages",
             time.time() - start_time,
             pages_processed=len(pages),
-            pages_successful=len([r for r in results.values() if r > 0]),
+            pages_successful=successful,
             total_chunks=total_chunks,
             average_chunks_per_page=total_chunks / len(pages) if pages else 0
         )
 
-        logger.info(f"Indexed {len(pages)} pages with {total_chunks} total chunks")
-        return results
+        logger.info(f"Indexed {len(pages)} pages: {successful} successful, {failed} failed, {total_chunks} total chunks")
+
+        return {
+            'successful': successful,
+            'failed': failed,
+            'total_chunks': total_chunks,
+            'page_results': page_results
+        }
 
     @logged("Search with auto-fallback")
     async def search_with_fallback(

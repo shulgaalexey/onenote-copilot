@@ -634,6 +634,106 @@ class OneNoteSearchTool:
             logger.error(f"Failed to get recent pages: {e}")
             raise OneNoteSearchError(f"Failed to get recent pages: {e}")
 
+    async def get_all_pages(self, limit: Optional[int] = None) -> List[OneNotePage]:
+        """
+        Get all OneNote pages from all notebooks.
+
+        Args:
+            limit: Optional maximum number of pages to return
+
+        Returns:
+            List of all pages from all notebooks with content loaded
+
+        Raises:
+            OneNoteSearchError: If operation fails
+        """
+        try:
+            token = await self.authenticator.get_valid_token()
+
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+
+            # Build params for API call
+            params = {
+                "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
+                "$expand": "parentSection,parentNotebook",
+                "$orderby": "lastModifiedDateTime desc"
+            }
+
+            # Add limit if specified
+            if limit:
+                params["$top"] = min(limit, 200)  # API limit is typically 200
+
+            endpoint = f"{self.base_url}/me/onenote/pages"
+
+            all_pages = []
+            next_url = None
+
+            # Handle pagination if no limit specified
+            while True:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    if next_url:
+                        response = await client.get(next_url, headers=headers)
+                    else:
+                        response = await client.get(endpoint, headers=headers, params=params)
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        pages_data = data.get("value", [])
+
+                        # Convert to OneNotePage models
+                        for page_data in pages_data:
+                            try:
+                                page = OneNotePage(**page_data)
+                                all_pages.append(page)
+
+                                # Stop if we've reached the limit
+                                if limit and len(all_pages) >= limit:
+                                    break
+                            except Exception as e:
+                                logger.warning(f"Failed to parse page data: {e}")
+                                continue
+
+                        # Check for more pages (pagination)
+                        next_url = data.get("@odata.nextLink")
+
+                        # Stop if we've reached the limit or no more pages
+                        if (limit and len(all_pages) >= limit) or not next_url:
+                            break
+                    else:
+                        raise OneNoteSearchError(f"Failed to get pages: {response.status_code}")
+
+            logger.info(f"Retrieved {len(all_pages)} pages from all notebooks")
+
+            # Fetch content for pages in batches to avoid overwhelming the API
+            if all_pages:
+                logger.info(f"Fetching content for {len(all_pages)} pages...")
+
+                # Process in smaller batches to manage memory and API limits
+                batch_size = 10
+                for i in range(0, len(all_pages), batch_size):
+                    batch = all_pages[i:i + batch_size]
+                    await self._fetch_page_contents(batch, token)
+
+                    # Progress logging for large operations
+                    if len(all_pages) > 20:
+                        progress = min(i + batch_size, len(all_pages))
+                        logger.info(f"Content fetched for {progress}/{len(all_pages)} pages")
+
+                    # Small delay between batches to respect API limits
+                    if i + batch_size < len(all_pages):
+                        await asyncio.sleep(0.5)
+
+            return all_pages
+
+        except AuthenticationError:
+            raise OneNoteSearchError("Authentication failed - please log in again")
+        except Exception as e:
+            logger.error(f"Failed to get all pages: {e}")
+            raise OneNoteSearchError(f"Failed to get all pages: {e}")
+
     async def get_notebooks(self) -> List[Dict[str, Any]]:
         """
         Get list of OneNote notebooks.

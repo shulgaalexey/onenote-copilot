@@ -667,7 +667,7 @@ class OneNoteAgent:
                                     break  # Exit the event loop
 
                 # Handle tool execution events
-                elif any(tool in event for tool in ["search_onenote", "get_recent_pages", "get_notebooks"]):
+                elif any(tool in event for tool in ["search_onenote", "get_recent_pages", "get_notebooks", "semantic_search"]):
                     # Tool execution
                     yield StreamingChunk.status_chunk("Processing results...")
                     tool_executed = True

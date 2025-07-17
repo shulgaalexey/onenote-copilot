@@ -112,6 +112,8 @@ class OneNoteSearchTool:
             match = re.search(pattern, query, re.IGNORECASE)
             if match:
                 subject = match.group(1).strip()
+                # Remove articles and common words at the beginning for better matching
+                subject = re.sub(r'^(the|a|an)\s+', '', subject, flags=re.IGNORECASE)
                 logger.debug(f"Extracted subject from thought query: '{subject}'")
                 return subject
 
@@ -163,7 +165,6 @@ class OneNoteSearchTool:
             variations.append(processed)
 
         # Extract key content words (preserve important terms)
-        import re
         words = re.findall(r'\b\w+\b', natural_query.lower())
         content_words = [w for w in words if w not in {
             'what', 'did', 'i', 'write', 'about', 'the', 'a', 'an', 'and', 'or',
@@ -175,6 +176,19 @@ class OneNoteSearchTool:
             content_query = ' '.join(content_words)
             if content_query and content_query not in variations:
                 variations.append(content_query)
+
+            # For compound terms, try individual words and partial combinations
+            if len(content_words) >= 2:
+                # Try each individual word
+                for word in content_words:
+                    if word not in variations and len(word) >= 3:
+                        variations.append(word)
+
+                # Try pairs of words
+                for i in range(len(content_words) - 1):
+                    pair = f"{content_words[i]} {content_words[i+1]}"
+                    if pair not in variations:
+                        variations.append(pair)
 
             # Try just the last content word (often the main topic)
             if len(content_words) > 1:
@@ -606,7 +620,6 @@ class OneNoteSearchTool:
 
             except ImportError:
                 # Fallback to simple regex-based extraction
-                import re
 
                 # Remove script and style elements
                 text = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)

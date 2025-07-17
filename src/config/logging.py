@@ -95,8 +95,9 @@ class OneNoteLogger:
             "%(message)s"  # Rich handler handles the formatting
         )
 
+        # More concise file formatter for better readability
         file_formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s",
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
 
@@ -111,7 +112,7 @@ class OneNoteLogger:
         console_handler.setLevel(getattr(logging, console_log_level.upper()))
         console_handler.setFormatter(console_formatter)
 
-        # File handler with rotation
+        # File handler with rotation and filtering
         file_handler = logging.handlers.RotatingFileHandler(
             self.log_file_path,
             maxBytes=10 * 1024 * 1024,  # 10MB
@@ -120,6 +121,26 @@ class OneNoteLogger:
         )
         file_handler.setLevel(getattr(logging, file_log_level.upper()))
         file_handler.setFormatter(file_formatter)
+
+        # Add a filter to exclude extremely noisy loggers from file logging
+        class NoiseFilter(logging.Filter):
+            """Filter out extremely verbose external library logs."""
+
+            EXCLUDED_PATTERNS = [
+                'markdown_it.rules_block',  # Markdown parsing internals
+                'httpcore.http11',          # HTTP connection details
+                'httpcore.connection',      # TCP connection details
+            ]
+
+            def filter(self, record):
+                """Return False to exclude the record from logging."""
+                logger_name = record.name
+                for pattern in self.EXCLUDED_PATTERNS:
+                    if logger_name.startswith(pattern):
+                        return False
+                return True
+
+        file_handler.addFilter(NoiseFilter())
 
         # Add handlers to root logger
         root_logger.addHandler(console_handler)
@@ -130,37 +151,104 @@ class OneNoteLogger:
 
         # Log startup message
         logger = logging.getLogger(__name__)
-        logger.info("🚀 OneNote Copilot logging system initialized")
-        logger.info(f"📁 Log file: {self.log_file_path}")
-        logger.info(f"📊 Console level: {console_log_level}, File level: {file_log_level}")
+        logger.info("OneNote Copilot logging system initialized")
+        logger.info(f"Log file: {self.log_file_path}")
+        logger.info(f"Console level: {console_log_level}, File level: {file_log_level}")
 
         self._configured = True
 
     def _configure_external_loggers(self) -> None:
         """Configure logging levels for external libraries."""
-        # Reduce noise from external libraries unless in debug mode
-        if self.settings.log_level != "DEBUG":
-            external_loggers = {
-                "httpx": logging.WARNING,
-                "urllib3": logging.WARNING,
-                "msal": logging.WARNING,
-                "openai": logging.WARNING,
-                "langchain": logging.WARNING,
-                "langgraph": logging.WARNING,
-                "asyncio": logging.WARNING,
+        # Define external libraries and their appropriate log levels
+        # Most external libraries should be WARNING or ERROR only to reduce noise
+        external_loggers = {
+            # HTTP and networking libraries
+            "httpx": logging.WARNING,
+            "httpcore": logging.WARNING,  # Very verbose TCP connection details
+            "urllib3": logging.WARNING,
+            "urllib3.connectionpool": logging.WARNING,
+
+            # Microsoft libraries
+            "msal": logging.INFO,  # Keep auth info but reduce debug noise
+
+            # AI/ML libraries
+            "openai": logging.WARNING,
+            "langchain": logging.WARNING,
+            "langgraph": logging.WARNING,
+
+            # Markdown parsing (extremely verbose)
+            "markdown_it": logging.WARNING,
+            "markdown_it.rules_block": logging.ERROR,  # These flood the logs
+            "markdown_it.rules_block.code": logging.ERROR,
+            "markdown_it.rules_block.fence": logging.ERROR,
+            "markdown_it.rules_block.blockquote": logging.ERROR,
+            "markdown_it.rules_block.hr": logging.ERROR,
+            "markdown_it.rules_block.list": logging.ERROR,
+            "markdown_it.rules_block.reference": logging.ERROR,
+            "markdown_it.rules_block.html_block": logging.ERROR,
+            "markdown_it.rules_block.heading": logging.ERROR,
+            "markdown_it.rules_block.lheading": logging.ERROR,
+            "markdown_it.rules_block.paragraph": logging.ERROR,
+
+            # System libraries
+            "asyncio": logging.WARNING,
+
+            # Vector database libraries
+            "chromadb": logging.WARNING,
+            "sentence_transformers": logging.WARNING,
+
+            # Web framework libraries (if any)
+            "uvicorn": logging.WARNING,
+            "fastapi": logging.WARNING,
+        }
+
+        # Apply the configuration regardless of debug mode
+        # Even in debug mode, external library noise is rarely useful
+        for logger_name, level in external_loggers.items():
+            logging.getLogger(logger_name).setLevel(level)
+
+        # Special handling for development vs production
+        if self.settings.log_level == "DEBUG":
+            # In debug mode, allow some external libraries to be more verbose
+            # but still filter out the most noisy ones
+            debug_friendly_loggers = {
+                "msal": logging.DEBUG,  # Auth debugging might be useful
+                "httpx": logging.INFO,   # HTTP requests at info level
+                "httpcore": logging.INFO,  # Still reduce TCP noise but allow some
             }
 
-            for logger_name, level in external_loggers.items():
+            for logger_name, level in debug_friendly_loggers.items():
                 logging.getLogger(logger_name).setLevel(level)
-        else:
-            # In debug mode, ensure external loggers can inherit DEBUG level
-            external_loggers = [
-                "httpx", "urllib3", "msal", "openai",
-                "langchain", "langgraph", "asyncio"
-            ]
-            for logger_name in external_loggers:
-                # Set to NOTSET so they inherit from root logger (DEBUG)
-                logging.getLogger(logger_name).setLevel(logging.NOTSET)
+
+    def enable_debug_for_component(self, component: str) -> None:
+        """
+        Enable debug logging for a specific component or library.
+
+        Useful for targeted debugging without flooding logs with all external noise.
+
+        Args:
+            component: Component name (e.g., 'httpcore', 'msal', 'chromadb')
+        """
+        logger = logging.getLogger(component)
+        logger.setLevel(logging.DEBUG)
+
+        # Log the change
+        main_logger = logging.getLogger(__name__)
+        main_logger.info(f"Enabled DEBUG logging for component: {component}")
+
+    def disable_debug_for_component(self, component: str) -> None:
+        """
+        Disable debug logging for a specific component (reset to WARNING).
+
+        Args:
+            component: Component name to reset
+        """
+        logger = logging.getLogger(component)
+        logger.setLevel(logging.WARNING)
+
+        # Log the change
+        main_logger = logging.getLogger(__name__)
+        main_logger.info(f"Disabled DEBUG logging for component: {component}")
 
     def get_logger(self, name: str) -> logging.Logger:
         """
@@ -248,6 +336,32 @@ def get_logger(name: str) -> logging.Logger:
     return _onenote_logger.get_logger(name)
 
 
+def enable_component_debug(component: str) -> None:
+    """
+    Enable debug logging for a specific component.
+
+    Args:
+        component: Component name (e.g., 'httpcore', 'msal', 'chromadb')
+    """
+    if _onenote_logger is None:
+        raise RuntimeError("Logging not initialized. Call setup_logging() first.")
+
+    _onenote_logger.enable_debug_for_component(component)
+
+
+def disable_component_debug(component: str) -> None:
+    """
+    Disable debug logging for a specific component.
+
+    Args:
+        component: Component name to reset
+    """
+    if _onenote_logger is None:
+        raise RuntimeError("Logging not initialized. Call setup_logging() first.")
+
+    _onenote_logger.disable_debug_for_component(component)
+
+
 def log_performance(func_name: str, duration: float, **kwargs) -> None:
     """
     Log performance metrics for functions.
@@ -259,12 +373,35 @@ def log_performance(func_name: str, duration: float, **kwargs) -> None:
     """
     logger = logging.getLogger("performance")
 
-    context_str = ""
-    if kwargs:
-        context_items = [f"{k}={v}" for k, v in kwargs.items()]
-        context_str = f" ({', '.join(context_items)})"
+    # Format duration for readability
+    if duration < 0.001:
+        duration_str = f"{duration*1000:.1f}ms"
+    elif duration < 1.0:
+        duration_str = f"{duration*1000:.0f}ms"
+    else:
+        duration_str = f"{duration:.2f}s"
 
-    logger.info(f"⚡ {func_name}: {duration:.3f}s{context_str}")
+    # Build context string with meaningful information
+    context_parts = []
+    for k, v in kwargs.items():
+        if k in ['count', 'size', 'pages', 'results', 'chunks']:
+            # Numeric metrics that are important for performance analysis
+            context_parts.append(f"{k}={v}")
+        elif k in ['operation', 'query_type', 'status']:
+            # String values that provide operation context
+            context_parts.append(f"{k}={v}")
+
+    context_str = f" ({', '.join(context_parts)})" if context_parts else ""
+
+    # Use different prefixes based on performance (avoiding Unicode emojis for Windows compatibility)
+    if duration < 0.1:
+        prefix = "FAST"   # Fast
+    elif duration < 1.0:
+        prefix = "NORM"   # Medium
+    else:
+        prefix = "SLOW"   # Slow
+
+    logger.info(f"[{prefix}] {func_name}: {duration_str}{context_str}")
 
 
 def log_api_call(
@@ -292,17 +429,17 @@ def log_api_call(
         sanitized_url = url.split("access_token")[0] + "access_token=***"
 
     if error:
-        logger.error(f"❌ {method} {sanitized_url} - Error: {error}")
+        logger.error(f"[ERROR] {method} {sanitized_url} - Error: {error}")
     elif status_code:
         duration_str = f" ({duration:.3f}s)" if duration else ""
         if 200 <= status_code < 300:
-            logger.info(f"✅ {method} {sanitized_url} - {status_code}{duration_str}")
+            logger.info(f"[SUCCESS] {method} {sanitized_url} - {status_code}{duration_str}")
         elif 400 <= status_code < 500:
-            logger.warning(f"⚠️ {method} {sanitized_url} - {status_code}{duration_str}")
+            logger.warning(f"[CLIENT_ERROR] {method} {sanitized_url} - {status_code}{duration_str}")
         else:
-            logger.error(f"❌ {method} {sanitized_url} - {status_code}{duration_str}")
+            logger.error(f"[SERVER_ERROR] {method} {sanitized_url} - {status_code}{duration_str}")
     else:
-        logger.info(f"🔄 {method} {sanitized_url}")
+        logger.info(f"[REQUEST] {method} {sanitized_url}")
 
 
 class LoggedFunction:
@@ -333,20 +470,20 @@ class LoggedFunction:
                 args_str = ", ".join([str(arg) for arg in args])
                 kwargs_str = ", ".join([f"{k}={v}" for k, v in kwargs.items()])
                 all_args = ", ".join(filter(None, [args_str, kwargs_str]))
-                logger.debug(f"🔄 {func.__name__}({all_args})")
+                logger.debug(f"[ENTER] {func.__name__}({all_args})")
             else:
-                logger.debug(f"🔄 {func.__name__}()")
+                logger.debug(f"[ENTER] {func.__name__}()")
 
             # Execute function with timing
             start_time = time.time()
             try:
                 result = func(*args, **kwargs)
                 duration = time.time() - start_time
-                logger.debug(f"✅ {func.__name__} completed in {duration:.3f}s")
+                logger.debug(f"[EXIT] {func.__name__} completed in {duration:.3f}s")
                 return result
             except Exception as e:
                 duration = time.time() - start_time
-                logger.error(f"❌ {func.__name__} failed in {duration:.3f}s: {e}")
+                logger.error(f"[FAIL] {func.__name__} failed in {duration:.3f}s: {e}")
                 raise
 
         @functools.wraps(func)
@@ -358,20 +495,20 @@ class LoggedFunction:
                 args_str = ", ".join([str(arg) for arg in args])
                 kwargs_str = ", ".join([f"{k}={v}" for k, v in kwargs.items()])
                 all_args = ", ".join(filter(None, [args_str, kwargs_str]))
-                logger.debug(f"🔄 {func.__name__}({all_args})")
+                logger.debug(f"[ENTER] {func.__name__}({all_args})")
             else:
-                logger.debug(f"🔄 {func.__name__}()")
+                logger.debug(f"[ENTER] {func.__name__}()")
 
             # Execute function with timing
             start_time = time.time()
             try:
                 result = await func(*args, **kwargs)
                 duration = time.time() - start_time
-                logger.debug(f"✅ {func.__name__} completed in {duration:.3f}s")
+                logger.debug(f"[EXIT] {func.__name__} completed in {duration:.3f}s")
                 return result
             except Exception as e:
                 duration = time.time() - start_time
-                logger.error(f"❌ {func.__name__} failed in {duration:.3f}s: {e}")
+                logger.error(f"[FAIL] {func.__name__} failed in {duration:.3f}s: {e}")
                 raise
 
         # Return appropriate wrapper based on function type
@@ -420,10 +557,10 @@ if __name__ == "__main__":
 
     # Test different log levels
     logger = get_logger(__name__)
-    logger.debug("🐛 Debug message - detailed information")
-    logger.info("ℹ️ Info message - general information")
-    logger.warning("⚠️ Warning message - something unusual")
-    logger.error("❌ Error message - something went wrong")
+    logger.debug("Debug message - detailed information")
+    logger.info("Info message - general information")
+    logger.warning("Warning message - something unusual")
+    logger.error("Error message - something went wrong")
 
     # Test performance logging
     log_performance("test_function", 0.123, param1="value1", param2="value2")
@@ -442,4 +579,4 @@ if __name__ == "__main__":
         return "success"
 
     result = test_function()
-    logger.info(f"✅ Test completed: {result}")
+    logger.info(f"Test completed: {result}")

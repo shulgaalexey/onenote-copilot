@@ -1,5 +1,28 @@
 # Progress Log
 
+## 2025-07-17: Logging Optimization for Better Debugging
+- **Task**: Review and optimize logging configuration to reduce verbosity and improve usefulness
+- **Current PRP**: Working on logging improvements based on actual log file analysis
+- **Context**: Log file shows excessive noise from external libraries (httpcore, markdown_it) making debugging difficult
+- **Key Issues Found**:
+  - httpcore library flooding logs with TCP connection details
+  - markdown_it library logging every parsing step at DEBUG level
+  - 1500+ lines of mostly low-level library details obscuring actual application logic
+  - Unicode emoji characters causing encoding errors on Windows
+- **Changes Implemented**:
+  - ✅ Enhanced external library filtering with comprehensive list of noisy loggers
+  - ✅ Added NoiseFilter class to completely exclude certain log patterns from file output
+  - ✅ Improved performance logging with readable duration formatting and contextual information
+  - ✅ Replaced Unicode emojis with plain text prefixes for Windows compatibility
+  - ✅ Added dynamic component debug control functions for targeted debugging
+  - ✅ More concise file formatter for better readability
+- **Results**: Log output reduced from 1500+ lines to ~13 focused, informative lines
+- **New Features**:
+  - `enable_component_debug(component)` / `disable_component_debug(component)` for targeted debugging
+  - Better performance logging with [FAST]/[NORM]/[SLOW] indicators and context
+  - Complete filtering of httpcore TCP details and markdown_it parsing noise
+- **Next Steps**: Monitor actual application usage to fine-tune filtering levels
+
 ## 2025-07-17: Semantic Search log_performance Fixes - Round 2
 - **Task**: Additional log_performance signature fixes in vector search operations
 - **Current PRP**: Resolving remaining log_performance signature issues in ChromaDB operations

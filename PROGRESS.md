@@ -1,5 +1,26 @@
 # Progress Log
 
+## 2025-07-17: Fixing Indexing Commands - OpenAI Client Context Manager Issue ✅ COMPLETED
+- **Task**: Fix `/reset-index` and `/index` commands failing due to OpenAI client context manager error
+- **Current PRP**: Working on semantic search indexing functionality
+- **Context**: Content fetching now works (pages have content), but embedding generation fails with "'NoneType' object does not support the context manager protocol"
+- **Key Issues Found from Logs**:
+  - Content fetching is successful: pages now have chunks generated (1-3 chunks per page)
+  - OpenAI embedding generation fails: "NoneType' object does not support the context manager protocol"
+  - All pages fail to index due to embedding generation errors
+  - Vector store collection reset fails: "Collection [onenote_content] already exists"
+- **Root Cause**: OpenAI client initialization or context manager usage issue in embeddings module
+- **Fixes Implemented**:
+  - ✅ Fixed OpenAI embedding generation: Removed incorrect `with log_api_call()` context manager usage
+  - ✅ Fixed vector store reset: Set `allow_reset=True` in ChromaDB settings and improved reset logic
+  - ✅ Added proper error handling for collection existence edge cases
+- **Test Results**: All tests passed successfully:
+  - Single embedding generation: ✅ 1536 dimensions
+  - Batch embedding generation: ✅ 3 embeddings
+  - Vector store reset: ✅ Successful
+  - Full indexing pipeline: ✅ 3 total chunks generated from 3 pages
+- **Status**: COMPLETED - `/reset-index` and `/index` commands should now work correctly
+
 ## 2025-07-17: Logging Optimization for Better Debugging
 - **Task**: Review and optimize logging configuration to reduce verbosity and improve usefulness
 - **Current PRP**: Working on logging improvements based on actual log file analysis

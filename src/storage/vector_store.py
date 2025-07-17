@@ -65,7 +65,7 @@ class VectorStore:
                     path=str(self.db_path),
                     settings=ChromaSettings(
                         anonymized_telemetry=False,
-                        allow_reset=False
+                        allow_reset=True  # Allow collection reset operations
                     )
                 )
                 logger.info(f"Initialized ChromaDB client at {self.db_path}")
@@ -384,16 +384,31 @@ class VectorStore:
             VectorStoreError: If reset fails
         """
         try:
-            # Delete the collection
-            if self._collection is not None:
+            # Try to delete existing collection
+            try:
                 self.client.delete_collection(self.collection_name)
-                self._collection = None
+                logger.info(f"Deleted existing collection '{self.collection_name}'")
+            except Exception as e:
+                # Collection might not exist, which is fine
+                logger.debug(f"Collection deletion not needed or failed: {e}")
+
+            # Reset internal references
+            self._collection = None
 
             # Create new empty collection
-            self._collection = self.client.create_collection(
-                name=self.collection_name,
-                metadata={"description": "OneNote content embeddings"}
-            )
+            try:
+                self._collection = self.client.create_collection(
+                    name=self.collection_name,
+                    metadata={"description": "OneNote content embeddings"}
+                )
+                logger.info(f"Created new collection '{self.collection_name}'")
+            except Exception as e:
+                # If creation fails due to existing collection, try to get it
+                if "already exists" in str(e).lower():
+                    logger.info(f"Collection '{self.collection_name}' already exists, getting existing one")
+                    self._collection = self.client.get_collection(self.collection_name)
+                else:
+                    raise e
 
             logger.info(f"Reset vector store collection '{self.collection_name}'")
 

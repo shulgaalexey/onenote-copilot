@@ -168,32 +168,33 @@ class EmbeddingGenerator:
             start_time = time.time()
 
             try:
-                with log_api_call("openai_embedding_batch", f"{len(batch)} items"):
-                    response = await self.client.embeddings.create(
-                        input=batch,
-                        model=self.settings.embedding_model,
-                        dimensions=self.settings.embedding_dimensions
-                    )
+                log_api_call("POST", f"openai_embedding_batch", None, None, None)
 
-                    self._api_call_count += 1
-                    self._total_tokens_used += response.usage.total_tokens
+                response = await self.client.embeddings.create(
+                    input=batch,
+                    model=self.settings.embedding_model,
+                    dimensions=self.settings.embedding_dimensions
+                )
 
-                    batch_embeddings = [data.embedding for data in response.data]
-                    all_embeddings.extend(batch_embeddings)
+                self._api_call_count += 1
+                self._total_tokens_used += response.usage.total_tokens
 
-                    duration = time.time() - start_time
-                    log_performance(
-                        "batch_generate_embeddings",
-                        duration,
-                        batch_size=len(batch),
-                        total_items=len(valid_contents),
-                        tokens_used=response.usage.total_tokens,
-                        model=self.settings.embedding_model
-                    )
+                batch_embeddings = [data.embedding for data in response.data]
+                all_embeddings.extend(batch_embeddings)
 
-                    # Rate limiting between batches
-                    if i + batch_size < len(valid_contents):
-                        await asyncio.sleep(0.1)
+                duration = time.time() - start_time
+                log_performance(
+                    "batch_generate_embeddings",
+                    duration,
+                    batch_size=len(batch),
+                    total_items=len(valid_contents),
+                    tokens_used=response.usage.total_tokens,
+                    model=self.settings.embedding_model
+                )
+
+                # Rate limiting between batches
+                if i + batch_size < len(valid_contents):
+                    await asyncio.sleep(0.1)
 
             except openai.APIError as e:
                 logger.error(f"OpenAI API error in batch embedding: {e}")

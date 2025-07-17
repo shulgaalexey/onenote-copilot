@@ -432,6 +432,7 @@ class OneNoteSearchTool:
                     if content:
                         page.content = content
                         page.text_content = self._extract_text_from_html(content)
+                        page.processed_content = page.text_content  # Use processed text for chunking
                     api_calls += calls
                 except Exception as e:
                     logger.warning(f"Failed to fetch content for page {page.id}: {e}")
@@ -574,13 +575,13 @@ class OneNoteSearchTool:
 
     async def get_recent_pages(self, limit: int = 10) -> List[OneNotePage]:
         """
-        Get recently modified OneNote pages.
+        Get recently modified OneNote pages with content.
 
         Args:
             limit: Maximum number of pages to return
 
         Returns:
-            List of recently modified pages
+            List of recently modified pages with content loaded
 
         Raises:
             OneNoteSearchError: If operation fails
@@ -595,7 +596,7 @@ class OneNoteSearchTool:
 
             params = {
                 "$top": min(limit, 50),
-                "$select": "id,title,createdDateTime,lastModifiedDateTime,parentSection,parentNotebook",
+                "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
                 "$expand": "parentSection,parentNotebook",
                 "$orderby": "lastModifiedDateTime desc"
             }
@@ -617,6 +618,11 @@ class OneNoteSearchTool:
                         except Exception as e:
                             logger.warning(f"Failed to parse page data: {e}")
                             continue
+
+                    # Fetch content for all pages
+                    if pages:
+                        logger.debug(f"Fetching content for {len(pages)} recent pages")
+                        await self._fetch_page_contents(pages, token)
 
                     return pages
                 else:

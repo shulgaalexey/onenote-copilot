@@ -78,6 +78,7 @@ class OneNotePage(BaseModel):
     content_url: Optional[HttpUrl] = Field(None, alias="contentUrl")
     content: Optional[str] = Field(None, description="HTML content when retrieved")
     text_content: Optional[str] = Field(None, description="Extracted text content for AI processing")
+    processed_content: Optional[str] = Field(None, description="Processed text content for chunking")
     level: Optional[int] = Field(None, description="Page level in hierarchy")
     order: Optional[int] = Field(None, description="Page order within section")
     links: Dict[str, Any] = Field(default_factory=dict)

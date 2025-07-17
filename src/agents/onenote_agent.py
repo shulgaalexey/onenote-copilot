@@ -406,7 +406,9 @@ class OneNoteAgent:
 
         search_indicators = [
             "search", "find", "look for", "show me", "what did i write",
-            "notes about", "pages about", "content about"
+            "notes about", "pages about", "content about", "thoughts about",
+            "what were my thoughts", "my thoughts on", "what did i think",
+            "what was my", "thoughts on", "ideas about"
         ]
 
         recent_indicators = [

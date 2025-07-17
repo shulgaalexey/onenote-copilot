@@ -374,6 +374,20 @@ class TestUtilityMethods:
         for query in test_cases:
             assert self.agent._needs_tool_call(query) is True
 
+    def test_needs_tool_call_thought_indicators(self):
+        """Test tool call detection for thought/opinion indicators."""
+        test_cases = [
+            "What were my thoughts about Robo-me?",
+            "What did I think about the project?",
+            "My thoughts on artificial intelligence",
+            "What was my opinion about the meeting?",
+            "thoughts about the new feature",
+            "ideas about machine learning"
+        ]
+
+        for query in test_cases:
+            assert self.agent._needs_tool_call(query) is True
+
     def test_needs_tool_call_no_indicators(self):
         """Test tool call detection when no indicators present."""
         test_cases = [

@@ -266,6 +266,33 @@ class TestOneNoteSearchTool:
         assert tool.timeout > 0
         assert "graph.microsoft.com" in tool.base_url
 
+    def test_prepare_search_query_thought_extraction(self):
+        """Test search query preparation for thought-related queries."""
+        tool = OneNoteSearchTool()
+
+        # Test thought-related query extraction
+        test_cases = [
+            ("What were my thoughts about Robo-me?", "Robo-me"),
+            ("What did I think about the project?", "the project"),
+            ("My thoughts on machine learning", "machine learning"),
+            ("Ideas about artificial intelligence", "artificial intelligence"),
+            ("Opinion about the meeting", "the meeting"),
+        ]
+
+        for query, expected in test_cases:
+            result = tool._prepare_search_query(query)
+            assert result == expected, f"Query '{query}' should extract '{expected}', got '{result}'"
+
+        # Test non-thought queries (should use normal processing)
+        normal_cases = [
+            ("Show me notes about vacation", "notes vacation"),
+            ("Find project documentation", "project documentation"),
+        ]
+
+        for query, expected in normal_cases:
+            result = tool._prepare_search_query(query)
+            assert result == expected, f"Query '{query}' should process to '{expected}', got '{result}'"
+
     @pytest.mark.asyncio
     @patch('httpx.AsyncClient')
     async def test_search_with_content_extraction(self, mock_client_class):

@@ -99,6 +99,22 @@ class OneNoteSearchTool:
         # Remove question marks and other problematic punctuation
         query = re.sub(r'[?!]', '', query)
 
+        # For thought-related queries, extract the subject after "about", "on", etc.
+        thought_patterns = [
+            r'thoughts?\s+about\s+(.+)',
+            r'thoughts?\s+on\s+(.+)',
+            r'think\s+about\s+(.+)',
+            r'opinion\s+about\s+(.+)',
+            r'ideas?\s+about\s+(.+)'
+        ]
+
+        for pattern in thought_patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                subject = match.group(1).strip()
+                logger.debug(f"Extracted subject from thought query: '{subject}'")
+                return subject
+
         # Remove common question words at the beginning
         question_patterns = [
             r'^what\s+(did\s+i\s+)?',
@@ -257,6 +273,7 @@ class OneNoteSearchTool:
             "$filter": filter_query,
             "$top": min(max_results, 50),  # API limit is 50 per request
             "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
+            "$expand": "parentSection,parentNotebook",
             "$orderby": "lastModifiedDateTime desc"
         }
 
@@ -318,6 +335,7 @@ class OneNoteSearchTool:
         params = {
             "$top": min(20, max_results * 2),  # Get more pages to search through
             "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
+            "$expand": "parentSection,parentNotebook",
             "$orderby": "lastModifiedDateTime desc"
         }
 
@@ -366,8 +384,8 @@ class OneNoteSearchTool:
                             page_dict = {
                                 'id': page.id,
                                 'title': page.title,
-                                'createdDateTime': page.created_datetime,
-                                'lastModifiedDateTime': page.last_modified_datetime,
+                                'createdDateTime': page.created_date_time,
+                                'lastModifiedDateTime': page.last_modified_date_time,
                                 'contentUrl': page.content_url,
                                 'parentSection': page.parent_section,
                                 'parentNotebook': page.parent_notebook
@@ -578,6 +596,7 @@ class OneNoteSearchTool:
             params = {
                 "$top": min(limit, 50),
                 "$select": "id,title,createdDateTime,lastModifiedDateTime,parentSection,parentNotebook",
+                "$expand": "parentSection,parentNotebook",
                 "$orderby": "lastModifiedDateTime desc"
             }
 

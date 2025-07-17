@@ -112,17 +112,15 @@ class OneNoteSearchTool:
             match = re.search(pattern, query, re.IGNORECASE)
             if match:
                 subject = match.group(1).strip()
+                # Remove articles and common words at the beginning for better matching
+                subject = re.sub(r'^(the|a|an)\s+', '', subject, flags=re.IGNORECASE)
                 logger.debug(f"Extracted subject from thought query: '{subject}'")
                 return subject
 
-        # Remove common question words at the beginning
+        # Remove only very specific question words at the beginning - be more conservative
         question_patterns = [
-            r'^what\s+(did\s+i\s+)?',
-            r'^where\s+(did\s+i\s+)?',
-            r'^when\s+(did\s+i\s+)?',
-            r'^how\s+(did\s+i\s+)?',
             r'^show\s+me\s+',
-            r'^find\s+',
+            r'^find\s+me\s+',
             r'^search\s+for\s+',
             r'^look\s+for\s+'
         ]
@@ -130,11 +128,10 @@ class OneNoteSearchTool:
         for pattern in question_patterns:
             query = re.sub(pattern, '', query, flags=re.IGNORECASE)
 
-        # Remove common filler words
-        filler_words = ['about', 'on', 'regarding', 'concerning', 'related to']
-        for word in filler_words:
-            # Only remove if it's at the beginning or preceded by whitespace
-            query = re.sub(rf'\b{re.escape(word)}\b\s*', '', query, flags=re.IGNORECASE)
+        # Only remove filler words if they're not part of the main content
+        # Be more selective about word removal to preserve semantic meaning
+        if query.startswith('about '):
+            query = query[6:]  # Remove 'about ' from start only
 
         # Clean up extra whitespace
         query = re.sub(r'\s+', ' ', query).strip()
@@ -145,6 +142,69 @@ class OneNoteSearchTool:
 
         logger.debug(f"Processed query: '{natural_query}' -> '{query}'")
         return query
+
+    def _generate_query_variations(self, natural_query: str) -> List[str]:
+        """
+        Generate multiple query variations to improve search success.
+
+        Args:
+            natural_query: Original natural language query
+
+        Returns:
+            List of query variations to try
+        """
+        variations = []
+
+        # Always include the original query (cleaned)
+        original = re.sub(r'[?!]', '', natural_query.strip())
+        variations.append(original)
+
+        # Add processed version
+        processed = self._prepare_search_query(natural_query)
+        if processed and processed != original:
+            variations.append(processed)
+
+        # Extract key content words (preserve important terms)
+        words = re.findall(r'\b\w+\b', natural_query.lower())
+        content_words = [w for w in words if w not in {
+            'what', 'did', 'i', 'write', 'about', 'the', 'a', 'an', 'and', 'or',
+            'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'
+        }]
+
+        if content_words:
+            # Join content words
+            content_query = ' '.join(content_words)
+            if content_query and content_query not in variations:
+                variations.append(content_query)
+
+            # For compound terms, try individual words and partial combinations
+            if len(content_words) >= 2:
+                # Try each individual word
+                for word in content_words:
+                    if word not in variations and len(word) >= 3:
+                        variations.append(word)
+
+                # Try pairs of words
+                for i in range(len(content_words) - 1):
+                    pair = f"{content_words[i]} {content_words[i+1]}"
+                    if pair not in variations:
+                        variations.append(pair)
+
+            # Try just the last content word (often the main topic)
+            if len(content_words) > 1:
+                last_word = content_words[-1]
+                if last_word not in variations:
+                    variations.append(last_word)
+
+        # Remove empty variations and deduplicate
+        variations = [v for v in variations if v and len(v.strip()) >= 2]
+        unique_variations = []
+        for v in variations:
+            if v not in unique_variations:
+                unique_variations.append(v)
+
+        logger.debug(f"Generated {len(unique_variations)} query variations: {unique_variations}")
+        return unique_variations
 
     async def search_pages(self, query: str, max_results: Optional[int] = None) -> SearchResult:
         """
@@ -198,6 +258,43 @@ class OneNoteSearchTool:
                         pages_data.append(page)
                         if len(pages_data) >= max_results:
                             break
+
+            # If still no results, try query variations
+            if len(pages_data) == 0:
+                logger.debug("No results found, trying query variations")
+                query_variations = self._generate_query_variations(original_query)
+
+                for i, variation in enumerate(query_variations[1:], 1):  # Skip first (already tried)
+                    if len(pages_data) >= max_results:
+                        break
+
+                    logger.debug(f"Trying variation {i}: '{variation}'")
+
+                    # Try title search with variation
+                    var_pages_data, var_api_calls = await self._search_pages_api(variation, token, max_results)
+                    api_calls += var_api_calls
+
+                    # Add new results
+                    existing_ids = {page.get('id') for page in pages_data}
+                    for page in var_pages_data:
+                        if page.get('id') not in existing_ids:
+                            pages_data.append(page)
+
+                    # If we found results, also try content search for this variation
+                    if len(var_pages_data) > 0 and len(pages_data) < max_results:
+                        var_content_pages, var_content_api_calls = await self._search_pages_by_content(variation, token, max_results - len(pages_data))
+                        api_calls += var_content_api_calls
+
+                        for page in var_content_pages:
+                            if page.get('id') not in existing_ids:
+                                pages_data.append(page)
+                                if len(pages_data) >= max_results:
+                                    break
+
+                    # Stop if we found enough results
+                    if len(pages_data) >= 3:  # Found some results
+                        logger.debug(f"Found {len(pages_data)} results with variation '{variation}'")
+                        break
 
             # Convert to OneNotePage models
             pages = []
@@ -432,6 +529,7 @@ class OneNoteSearchTool:
                     if content:
                         page.content = content
                         page.text_content = self._extract_text_from_html(content)
+                        page.processed_content = page.text_content  # Use processed text for chunking
                     api_calls += calls
                 except Exception as e:
                     logger.warning(f"Failed to fetch content for page {page.id}: {e}")
@@ -522,7 +620,6 @@ class OneNoteSearchTool:
 
             except ImportError:
                 # Fallback to simple regex-based extraction
-                import re
 
                 # Remove script and style elements
                 text = re.sub(r'<script[^>]*>.*?</script>', '', html_content, flags=re.DOTALL | re.IGNORECASE)
@@ -574,13 +671,13 @@ class OneNoteSearchTool:
 
     async def get_recent_pages(self, limit: int = 10) -> List[OneNotePage]:
         """
-        Get recently modified OneNote pages.
+        Get recently modified OneNote pages with content.
 
         Args:
             limit: Maximum number of pages to return
 
         Returns:
-            List of recently modified pages
+            List of recently modified pages with content loaded
 
         Raises:
             OneNoteSearchError: If operation fails
@@ -595,7 +692,7 @@ class OneNoteSearchTool:
 
             params = {
                 "$top": min(limit, 50),
-                "$select": "id,title,createdDateTime,lastModifiedDateTime,parentSection,parentNotebook",
+                "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
                 "$expand": "parentSection,parentNotebook",
                 "$orderby": "lastModifiedDateTime desc"
             }
@@ -618,6 +715,11 @@ class OneNoteSearchTool:
                             logger.warning(f"Failed to parse page data: {e}")
                             continue
 
+                    # Fetch content for all pages
+                    if pages:
+                        logger.debug(f"Fetching content for {len(pages)} recent pages")
+                        await self._fetch_page_contents(pages, token)
+
                     return pages
                 else:
                     raise OneNoteSearchError(f"Failed to get recent pages: {response.status_code}")
@@ -627,6 +729,106 @@ class OneNoteSearchTool:
         except Exception as e:
             logger.error(f"Failed to get recent pages: {e}")
             raise OneNoteSearchError(f"Failed to get recent pages: {e}")
+
+    async def get_all_pages(self, limit: Optional[int] = None) -> List[OneNotePage]:
+        """
+        Get all OneNote pages from all notebooks.
+
+        Args:
+            limit: Optional maximum number of pages to return
+
+        Returns:
+            List of all pages from all notebooks with content loaded
+
+        Raises:
+            OneNoteSearchError: If operation fails
+        """
+        try:
+            token = await self.authenticator.get_valid_token()
+
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+
+            # Build params for API call
+            params = {
+                "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
+                "$expand": "parentSection,parentNotebook",
+                "$orderby": "lastModifiedDateTime desc"
+            }
+
+            # Add limit if specified
+            if limit:
+                params["$top"] = min(limit, 200)  # API limit is typically 200
+
+            endpoint = f"{self.base_url}/me/onenote/pages"
+
+            all_pages = []
+            next_url = None
+
+            # Handle pagination if no limit specified
+            while True:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    if next_url:
+                        response = await client.get(next_url, headers=headers)
+                    else:
+                        response = await client.get(endpoint, headers=headers, params=params)
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        pages_data = data.get("value", [])
+
+                        # Convert to OneNotePage models
+                        for page_data in pages_data:
+                            try:
+                                page = OneNotePage(**page_data)
+                                all_pages.append(page)
+
+                                # Stop if we've reached the limit
+                                if limit and len(all_pages) >= limit:
+                                    break
+                            except Exception as e:
+                                logger.warning(f"Failed to parse page data: {e}")
+                                continue
+
+                        # Check for more pages (pagination)
+                        next_url = data.get("@odata.nextLink")
+
+                        # Stop if we've reached the limit or no more pages
+                        if (limit and len(all_pages) >= limit) or not next_url:
+                            break
+                    else:
+                        raise OneNoteSearchError(f"Failed to get pages: {response.status_code}")
+
+            logger.info(f"Retrieved {len(all_pages)} pages from all notebooks")
+
+            # Fetch content for pages in batches to avoid overwhelming the API
+            if all_pages:
+                logger.info(f"Fetching content for {len(all_pages)} pages...")
+
+                # Process in smaller batches to manage memory and API limits
+                batch_size = 10
+                for i in range(0, len(all_pages), batch_size):
+                    batch = all_pages[i:i + batch_size]
+                    await self._fetch_page_contents(batch, token)
+
+                    # Progress logging for large operations
+                    if len(all_pages) > 20:
+                        progress = min(i + batch_size, len(all_pages))
+                        logger.info(f"Content fetched for {progress}/{len(all_pages)} pages")
+
+                    # Small delay between batches to respect API limits
+                    if i + batch_size < len(all_pages):
+                        await asyncio.sleep(0.5)
+
+            return all_pages
+
+        except AuthenticationError:
+            raise OneNoteSearchError("Authentication failed - please log in again")
+        except Exception as e:
+            logger.error(f"Failed to get all pages: {e}")
+            raise OneNoteSearchError(f"Failed to get all pages: {e}")
 
     async def get_notebooks(self) -> List[Dict[str, Any]]:
         """

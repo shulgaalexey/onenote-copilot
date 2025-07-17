@@ -24,6 +24,8 @@ from rich.traceback import install
 
 from .auth.microsoft_auth import MicrosoftAuthenticator
 from .cli.interface import OneNoteCLI
+from .commands.index_content import (cmd_index_all_content,
+                                     cmd_index_recent_content, cmd_show_status)
 from .config.logging import get_logger, setup_logging
 from .config.settings import get_settings
 
@@ -237,7 +239,7 @@ def main(
 
     # Get logger for main module
     logger = get_logger(__name__)
-    logger.info(f"🚀 OneNote Copilot v{__version__} starting...")
+    logger.info(f"OneNote Copilot v{__version__} starting...")
 
     # Handle info flag
     if show_info:
@@ -265,7 +267,7 @@ def main(
 
         # Start the main application
         try:
-            console.print("[bold blue]🚀 Starting OneNote Copilot...[/bold blue]")
+            console.print("[bold blue]Starting OneNote Copilot...[/bold blue]")
             console.print()
 
             # Run the CLI interface
@@ -280,7 +282,7 @@ def main(
             if debug:
                 console.print_exception()
             else:
-                console.print(f"[red]❌ Failed to start OneNote Copilot: {e}[/red]")
+                console.print(f"[red]X Failed to start OneNote Copilot: {e}[/red]")
                 console.print("[dim]💡 Use --debug flag for detailed error information[/dim]")
             raise typer.Exit(1)
 
@@ -364,6 +366,85 @@ You can override settings using environment variables:
 
     except Exception as e:
         console.print(f"[red]❌ Error loading configuration: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def index(
+    initial: bool = typer.Option(
+        False,
+        "--initial",
+        help="🚀 Perform initial indexing of all OneNote content"
+    ),
+    sync: bool = typer.Option(
+        False,
+        "--sync",
+        help="🔄 Sync recent changes (last 30 days)"
+    ),
+    recent_days: int = typer.Option(
+        30,
+        "--recent-days",
+        help="📅 Number of recent days to sync (default: 30)"
+    ),
+    limit: Optional[int] = typer.Option(
+        None,
+        "--limit",
+        help="🔢 Limit number of pages to process (for testing)"
+    ),
+    status: bool = typer.Option(
+        False,
+        "--status",
+        help="📊 Show current indexing status and statistics"
+    )
+) -> None:
+    """
+    🔍 Index OneNote content for semantic search.
+
+    This command processes your OneNote content and creates vector embeddings
+    for semantic search capabilities. Choose from different indexing modes:
+
+    **Initial Indexing** (--initial):
+    Process all accessible OneNote content. Use this for first-time setup
+    or when you want to rebuild the entire search index.
+
+    **Sync Mode** (--sync):
+    Process recent changes only. Faster option for regular updates.
+
+    **Status Check** (--status):
+    Display current indexing statistics without processing content.
+
+    **Examples:**
+    - First-time setup: `onenote-copilot index --initial`
+    - Regular updates: `onenote-copilot index --sync`
+    - Custom timeframe: `onenote-copilot index --sync --recent-days 7`
+    - Check status: `onenote-copilot index --status`
+    - Test with limit: `onenote-copilot index --initial --limit 10`
+    """
+    try:
+        if status:
+            # Show indexing status
+            asyncio.run(cmd_show_status())
+        elif initial:
+            # Perform initial indexing
+            console.print("[yellow]🚀 Starting initial content indexing...[/yellow]")
+            asyncio.run(cmd_index_all_content(limit))
+        elif sync:
+            # Perform sync indexing
+            console.print(f"[yellow]🔄 Syncing recent content ({recent_days} days)...[/yellow]")
+            asyncio.run(cmd_index_recent_content(recent_days))
+        else:
+            # Default to showing status if no specific action requested
+            console.print("[blue]ℹ️  No action specified. Showing current status:[/blue]")
+            asyncio.run(cmd_show_status())
+            console.print("\n[dim]💡 Use --initial for first-time indexing or --sync for updates[/dim]")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⏹️  Indexing cancelled by user[/yellow]")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Indexing command failed: {e}")
+        console.print(f"[red]X Indexing failed: {e}[/red]")
         raise typer.Exit(1)
 
 

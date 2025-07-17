@@ -536,3 +536,167 @@ class TestOneNoteSearchErrorAdditional:
         repr_str = repr(error)
         assert "OneNoteSearchError" in repr_str
         assert "Test error" in repr_str
+
+    @pytest.mark.asyncio
+    async def test_get_all_pages_success(self, search_tool):
+        """Test get_all_pages returns all pages successfully."""
+        # Mock API response
+        mock_response_data = {
+            "value": [
+                {
+                    "id": "page1",
+                    "title": "Test Page 1",
+                    "createdDateTime": "2025-01-01T10:00:00Z",
+                    "lastModifiedDateTime": "2025-01-02T15:30:00Z",
+                    "contentUrl": "https://example.com/content1"
+                },
+                {
+                    "id": "page2",
+                    "title": "Test Page 2",
+                    "createdDateTime": "2025-01-01T11:00:00Z",
+                    "lastModifiedDateTime": "2025-01-02T16:30:00Z",
+                    "contentUrl": "https://example.com/content2"
+                }
+            ]
+        }
+
+        # Mock the httpx response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = mock_response_data
+
+        # Mock _fetch_page_contents to avoid actual content fetching
+        search_tool._fetch_page_contents = AsyncMock(return_value=2)
+
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+
+            pages = await search_tool.get_all_pages()
+
+            assert len(pages) == 2
+            assert pages[0].id == "page1"
+            assert pages[0].title == "Test Page 1"
+            assert pages[1].id == "page2"
+            assert pages[1].title == "Test Page 2"
+
+    @pytest.mark.asyncio
+    async def test_get_all_pages_with_limit(self, search_tool):
+        """Test get_all_pages respects limit parameter."""
+        # Mock API response with more pages than limit
+        mock_response_data = {
+            "value": [
+                {
+                    "id": "page1",
+                    "title": "Test Page 1",
+                    "createdDateTime": "2025-01-01T10:00:00Z",
+                    "lastModifiedDateTime": "2025-01-02T15:30:00Z",
+                    "contentUrl": "https://example.com/content1"
+                },
+                {
+                    "id": "page2",
+                    "title": "Test Page 2",
+                    "createdDateTime": "2025-01-01T11:00:00Z",
+                    "lastModifiedDateTime": "2025-01-02T16:30:00Z",
+                    "contentUrl": "https://example.com/content2"
+                }
+            ]
+        }
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = mock_response_data
+
+        # Mock _fetch_page_contents
+        search_tool._fetch_page_contents = AsyncMock(return_value=1)
+
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+
+            # Test with limit of 1
+            pages = await search_tool.get_all_pages(limit=1)
+
+            assert len(pages) == 1
+            assert pages[0].id == "page1"
+
+    @pytest.mark.asyncio
+    async def test_get_all_pages_authentication_error(self, search_tool):
+        """Test get_all_pages handles authentication errors."""
+        from src.auth.microsoft_auth import AuthenticationError
+
+        search_tool.authenticator.get_valid_token = AsyncMock(side_effect=AuthenticationError("Auth failed"))
+
+        with pytest.raises(OneNoteSearchError) as exc_info:
+            await search_tool.get_all_pages()
+
+        assert "Authentication failed" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_get_all_pages_api_error(self, search_tool):
+        """Test get_all_pages handles API errors."""
+        mock_response = Mock()
+        mock_response.status_code = 500
+
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+
+            with pytest.raises(OneNoteSearchError) as exc_info:
+                await search_tool.get_all_pages()
+
+            assert "Failed to get pages: 500" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_get_all_pages_pagination(self, search_tool):
+        """Test get_all_pages handles pagination correctly."""
+        # First page response
+        first_response_data = {
+            "value": [
+                {
+                    "id": "page1",
+                    "title": "Test Page 1",
+                    "createdDateTime": "2025-01-01T10:00:00Z",
+                    "lastModifiedDateTime": "2025-01-02T15:30:00Z",
+                    "contentUrl": "https://example.com/content1"
+                }
+            ],
+            "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/onenote/pages?$skip=1"
+        }
+
+        # Second page response (no more pages)
+        second_response_data = {
+            "value": [
+                {
+                    "id": "page2",
+                    "title": "Test Page 2",
+                    "createdDateTime": "2025-01-01T11:00:00Z",
+                    "lastModifiedDateTime": "2025-01-02T16:30:00Z",
+                    "contentUrl": "https://example.com/content2"
+                }
+            ]
+        }
+
+        # Mock responses
+        first_response = Mock()
+        first_response.status_code = 200
+        first_response.json.return_value = first_response_data
+
+        second_response = Mock()
+        second_response.status_code = 200
+        second_response.json.return_value = second_response_data
+
+        # Mock _fetch_page_contents
+        search_tool._fetch_page_contents = AsyncMock(return_value=2)
+
+        with patch('httpx.AsyncClient') as mock_client:
+            # Return different responses for first and second calls
+            mock_client.return_value.__aenter__.return_value.get = AsyncMock(
+                side_effect=[first_response, second_response]
+            )
+
+            pages = await search_tool.get_all_pages()
+
+            assert len(pages) == 2
+            assert pages[0].id == "page1"
+            assert pages[1].id == "page2"
+
+            # Verify that get was called twice (once for each page)
+            assert mock_client.return_value.__aenter__.return_value.get.call_count == 2

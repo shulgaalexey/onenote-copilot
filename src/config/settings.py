@@ -144,6 +144,90 @@ class Settings(BaseSettings):
         description="Whether to enable markdown rendering in CLI"
     )
 
+    # Semantic Search Configuration
+    embedding_model: str = Field(
+        default="text-embedding-3-small",
+        description="OpenAI model for generating embeddings"
+    )
+    embedding_dimensions: int = Field(
+        default=1536,
+        description="Embedding vector dimensions",
+        gt=0,
+        le=3072
+    )
+    embedding_batch_size: int = Field(
+        default=100,
+        description="Batch size for embedding generation",
+        gt=0,
+        le=2048
+    )
+    vector_db_path: str = Field(
+        default="./data/vector_store",
+        description="Path to ChromaDB vector database"
+    )
+    vector_db_collection_name: str = Field(
+        default="onenote_content",
+        description="ChromaDB collection name for OneNote content"
+    )
+    semantic_search_threshold: float = Field(
+        default=0.4,
+        description="Minimum similarity threshold for semantic search",
+        ge=0.0,
+        le=1.0
+    )
+    semantic_search_limit: int = Field(
+        default=10,
+        description="Maximum number of semantic search results",
+        gt=0,
+        le=100
+    )
+    hybrid_search_weight: float = Field(
+        default=0.6,
+        description="Weight for semantic vs keyword search in hybrid mode (0.0=all keyword, 1.0=all semantic)",
+        ge=0.0,
+        le=1.0
+    )
+    max_chunks_per_page: int = Field(
+        default=5,
+        description="Maximum number of text chunks per OneNote page",
+        gt=0,
+        le=20
+    )
+    chunk_size: int = Field(
+        default=1000,
+        description="Size of text chunks for embedding",
+        gt=100,
+        le=8000
+    )
+    chunk_overlap: int = Field(
+        default=200,
+        description="Overlap between text chunks",
+        ge=0,
+        le=500
+    )
+    enable_hybrid_search: bool = Field(
+        default=True,
+        description="Enable hybrid search combining semantic and keyword search"
+    )
+    cache_embeddings: bool = Field(
+        default=True,
+        description="Cache embeddings to reduce API calls"
+    )
+    background_indexing: bool = Field(
+        default=False,
+        description="Enable background indexing of new content"
+    )
+
+    @computed_field
+    @property
+    def vector_db_full_path(self) -> Path:
+        """Get the full path to the vector database directory."""
+        if Path(self.vector_db_path).is_absolute():
+            return Path(self.vector_db_path)
+        else:
+            # Relative to project root
+            return Path.cwd() / self.vector_db_path
+
     @computed_field
     @property
     def msal_scopes(self) -> list[str]:
@@ -217,6 +301,36 @@ class Settings(BaseSettings):
     @field_validator("cli_markdown_enabled", mode="before")
     @classmethod
     def validate_cli_markdown_enabled(cls, v) -> bool:
+        """Parse boolean from environment variable."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "yes", "1", "on", "enable", "enabled")
+        return bool(v)
+
+    @field_validator("enable_hybrid_search", mode="before")
+    @classmethod
+    def validate_enable_hybrid_search(cls, v) -> bool:
+        """Parse boolean from environment variable."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "yes", "1", "on", "enable", "enabled")
+        return bool(v)
+
+    @field_validator("cache_embeddings", mode="before")
+    @classmethod
+    def validate_cache_embeddings(cls, v) -> bool:
+        """Parse boolean from environment variable."""
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "yes", "1", "on", "enable", "enabled")
+        return bool(v)
+
+    @field_validator("background_indexing", mode="before")
+    @classmethod
+    def validate_background_indexing(cls, v) -> bool:
         """Parse boolean from environment variable."""
         if isinstance(v, bool):
             return v

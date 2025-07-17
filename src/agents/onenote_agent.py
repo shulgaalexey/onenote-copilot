@@ -59,6 +59,10 @@ class OneNoteAgent:
         self.search_tool = OneNoteSearchTool(self.authenticator, self.settings)
         self.content_processor = OneNoteContentProcessor()
 
+        # Initialize semantic search components
+        self._semantic_search_engine = None
+        self._semantic_search_enabled = self.settings.enable_hybrid_search
+
         # Initialize LLM
         self.llm = ChatOpenAI(
             api_key=self.settings.openai_api_key,
@@ -73,6 +77,22 @@ class OneNoteAgent:
         # Agent state
         self.current_state: Optional[AgentState] = None
 
+    @property
+    def semantic_search_engine(self):
+        """Lazy initialization of semantic search engine."""
+        if self._semantic_search_engine is None and self._semantic_search_enabled:
+            try:
+                from ..search.semantic_search import SemanticSearchEngine
+                self._semantic_search_engine = SemanticSearchEngine(
+                    search_tool=self.search_tool,
+                    settings=self.settings
+                )
+                logger.info("Semantic search engine initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize semantic search: {e}")
+                self._semantic_search_enabled = False
+        return self._semantic_search_engine
+
     def _create_agent_graph(self) -> Any:
         """Create the LangGraph workflow for the agent."""
         workflow = StateGraph(MessagesState)
@@ -80,6 +100,7 @@ class OneNoteAgent:
         # Add nodes
         workflow.add_node("agent", self._agent_node)
         workflow.add_node("search_onenote", self._search_onenote_node)
+        workflow.add_node("semantic_search", self._semantic_search_node)
         workflow.add_node("get_recent_pages", self._get_recent_pages_node)
         workflow.add_node("get_notebooks", self._get_notebooks_node)
 
@@ -89,6 +110,7 @@ class OneNoteAgent:
             self._should_use_tools,
             {
                 "search_onenote": "search_onenote",
+                "semantic_search": "semantic_search",
                 "get_recent_pages": "get_recent_pages",
                 "get_notebooks": "get_notebooks",
                 "end": "__end__"
@@ -97,6 +119,7 @@ class OneNoteAgent:
 
         # Add edges back to agent after tool execution
         workflow.add_edge("search_onenote", "agent")
+        workflow.add_edge("semantic_search", "agent")
         workflow.add_edge("get_recent_pages", "agent")
         workflow.add_edge("get_notebooks", "agent")
 
@@ -256,6 +279,110 @@ class OneNoteAgent:
             error_msg = AIMessage(content=f"SEARCH_ERROR: Unexpected error during search: {e}")
             return {"messages": messages + [error_msg]}
 
+    async def _semantic_search_node(self, state: MessagesState) -> MessagesState:
+        """
+        Semantic search OneNote tool node using vector embeddings.
+
+        Args:
+            state: Current conversation state
+
+        Returns:
+            Updated state with semantic search results
+        """
+        try:
+            messages = state["messages"]
+            last_message = messages[-1]
+
+            # Extract tool information from the last message
+            if isinstance(last_message.content, str):
+                tool_info = json.loads(last_message.content)
+            else:
+                tool_info = {"query": str(last_message.content), "limit": 10}
+
+            query = tool_info.get("query", "")
+            limit = tool_info.get("limit", self.settings.semantic_search_limit)
+
+            logger.info(f"Performing semantic search for: '{query}'")
+
+            # Check if semantic search is available
+            if not self._semantic_search_enabled or not self.semantic_search_engine:
+                logger.warning("Semantic search not available, falling back to keyword search")
+                # Delegate to regular search
+                return await self._search_onenote_node(state)
+
+            # Perform semantic search with fallback
+            search_results = await self.semantic_search_engine.search_with_fallback(
+                query=query,
+                limit=limit,
+                prefer_semantic=True
+            )
+
+            # Format results for LLM
+            if search_results:
+                # Convert semantic results to pages for formatting
+                pages = []
+                for result in search_results:
+                    if result.page:
+                        pages.append(result.page)
+                    else:
+                        # Create a pseudo-page from chunk data
+                        from ..models.onenote import OneNotePage
+                        pseudo_page = OneNotePage(
+                            id=result.chunk.page_id,
+                            title=result.chunk.page_title,
+                            content=result.chunk.content,
+                            content_url=None,
+                            created_date_time=None,
+                            last_modified_date_time=None
+                        )
+                        pages.append(pseudo_page)
+
+                # Create a search result object for formatting
+                from ..models.onenote import SearchResult
+                formatted_search_result = SearchResult(
+                    query=query,
+                    pages=pages[:limit],
+                    total_count=len(pages)
+                )
+
+                formatted_context = self.content_processor.format_search_results_for_ai(formatted_search_result)
+
+                # Add semantic search information
+                search_type_info = [result.search_type for result in search_results[:3]]
+                context_with_info = f"[Semantic Search Results - Types: {', '.join(set(search_type_info))}]\n\n{formatted_context}"
+
+                tool_response = AIMessage(content=f"SEARCH_RESULTS:\n{context_with_info}")
+            else:
+                # No semantic results found, try keyword search as fallback
+                logger.info("No semantic results found, attempting keyword search fallback")
+
+                try:
+                    # Fallback to regular keyword search
+                    search_result = await self.search_tool.search_pages(query, limit)
+
+                    if search_result.pages:
+                        formatted_context = self.content_processor.format_search_results_for_ai(search_result)
+                        context_with_info = f"[Keyword Search Results - Semantic search found no matches]\n\n{formatted_context}"
+                        tool_response = AIMessage(content=f"SEARCH_RESULTS:\n{context_with_info}")
+                    else:
+                        tool_response = AIMessage(content=f"NO_RESULTS: No pages found for query '{query}' using semantic or keyword search")
+                except Exception as e:
+                    logger.error(f"Keyword search fallback failed: {e}")
+                    tool_response = AIMessage(content=f"NO_RESULTS: No pages found for query '{query}'")
+
+            return {"messages": messages + [tool_response]}
+
+        except Exception as e:
+            logger.error(f"Semantic search node error: {e}")
+            # Fallback to regular search on error
+            try:
+                logger.info("Semantic search failed, falling back to keyword search")
+                return await self._search_onenote_node(state)
+            except Exception as fallback_error:
+                logger.error(f"Keyword search fallback also failed: {fallback_error}")
+                error_msg = AIMessage(content=f"SEARCH_ERROR: Both semantic and keyword search failed: {e}")
+                return {"messages": messages + [error_msg]}
+
     async def _get_recent_pages_node(self, state: MessagesState) -> MessagesState:
         """
         Get recent OneNote pages tool node.
@@ -382,6 +509,8 @@ class OneNoteAgent:
                     if not tool_results_present:
                         if tool_name == "search_onenote":
                             return "search_onenote"
+                        elif tool_name == "semantic_search":
+                            return "semantic_search"
                         elif tool_name == "get_recent_pages":
                             return "get_recent_pages"
                         elif tool_name == "get_notebooks":
@@ -448,9 +577,20 @@ class OneNoteAgent:
         elif any(word in lower_content for word in ["notebook", "notebooks"]):
             return {"tool": "get_notebooks"}
         else:
-            # Default to search
+            # Determine if semantic search should be used
+            # Use semantic search for conceptual queries
+            semantic_indicators = [
+                "think about", "thought about", "ideas about", "opinion on", "feels about",
+                "vibe", "concept", "philosophy", "approach", "strategy", "methodology",
+                "what did i", "tell me about", "my thoughts on", "my ideas on"
+            ]
+
+            use_semantic = (
+                self._semantic_search_enabled and
+                any(indicator in lower_content for indicator in semantic_indicators)
+            )
+
             # Extract potential search query from content
-            # This is a simplified extraction - in production you might want more sophisticated NLP
             query = content
 
             # Clean up the query
@@ -459,7 +599,15 @@ class OneNoteAgent:
 
             query = query.strip()
 
-            return {"tool": "search_onenote", "query": query, "max_results": 10}
+            # Choose tool based on query characteristics
+            tool_name = "semantic_search" if use_semantic else "search_onenote"
+            limit_key = "limit" if use_semantic else "max_results"
+
+            return {
+                "tool": tool_name,
+                "query": query,
+                limit_key: 10
+            }
 
     async def process_query(self, query: str) -> AsyncGenerator[StreamingChunk, None]:
         """

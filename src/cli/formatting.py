@@ -406,6 +406,12 @@ Just type your questions naturally! Examples:
 - **`/clear`** - Clear conversation history
 - **`/quit`** or **`/exit`** - Exit the application
 
+## Semantic Search Commands
+- **`/index [recent]`** - Index OneNote content for semantic search
+- **`/semantic <query>`** - Perform semantic search on indexed content
+- **`/stats`** - Show semantic search statistics and configuration
+- **`/reset-index`** - Reset the semantic search index (warning: deletes all indexed data)
+
 ## Tips
 - Be specific in your queries for better results
 - I search across all your notebooks and sections

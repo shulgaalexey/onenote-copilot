@@ -66,6 +66,10 @@ class OneNoteCLI:
             '/notebooks': self._list_notebooks,
             '/recent': self._show_recent_pages,
             '/content': self._show_page_content,
+            '/index': self._index_content,
+            '/semantic': self._semantic_search,
+            '/stats': self._show_semantic_stats,
+            '/reset-index': self._reset_semantic_index,
             '/starters': self._show_conversation_starters,
             '/clear': self._clear_history,
             '/quit': self._quit_chat,
@@ -244,6 +248,10 @@ class OneNoteCLI:
         # Handle commands with arguments
         if command_name == '/content':
             return await self._show_page_content(command_args)
+        elif command_name == '/index':
+            return await self._index_content(command_args)
+        elif command_name == '/semantic':
+            return await self._semantic_search(command_args)
         elif command_name in self.commands:
             return await self.commands[command_name]()
         else:
@@ -462,6 +470,161 @@ Stay organized! 📚✨
 
         command = text.split()[0]
         return command in self.commands
+
+    @logged
+    async def _index_content(self, args: str = "") -> bool:
+        """
+        Index OneNote content for semantic search.
+
+        Args:
+            args: Optional arguments (e.g., 'recent' for recent pages only)
+
+        Returns:
+            True to continue chat loop
+        """
+        try:
+            # Check if semantic search is available
+            if not hasattr(self.agent, 'semantic_search_engine') or not self.agent.semantic_search_engine:
+                self.console.print("[yellow]📚 Semantic search is not available in this configuration.[/yellow]")
+                return True
+
+            # Parse arguments
+            index_recent_only = args.strip().lower() == 'recent'
+
+            with self.console.status("[bold blue]Indexing OneNote content...", spinner="dots"):
+                if index_recent_only:
+                    # Index only recent pages
+                    self.console.print("[dim]Getting recent pages for indexing...[/dim]")
+                    recent_pages = await self.agent.get_recent_pages(limit=20)
+
+                    if recent_pages:
+                        indexer = self.agent.semantic_search_engine.content_chunker.__class__(self.settings)
+                        result = await self.agent.semantic_search_engine.index_pages(recent_pages)
+
+                        self.console.print(f"[green]✅ Indexed {result.get('successful', 0)} recent pages[/green]")
+                        if result.get('failed', 0) > 0:
+                            self.console.print(f"[yellow]⚠️ Failed to index {result['failed']} pages[/yellow]")
+                    else:
+                        self.console.print("[yellow]📄 No recent pages found to index.[/yellow]")
+                else:
+                    self.console.print("[yellow]📚 Full content indexing not yet implemented in CLI.[/yellow]")
+                    self.console.print("[dim]Use '/index recent' to index recent pages only.[/dim]")
+
+            return True
+
+        except Exception as e:
+            self.console.print(f"[red]❌ Error indexing content: {e}[/red]")
+            return True
+
+    @logged
+    async def _semantic_search(self, query: str = "") -> bool:
+        """
+        Perform semantic search on OneNote content.
+
+        Args:
+            query: Search query
+
+        Returns:
+            True to continue chat loop
+        """
+        try:
+            if not query.strip():
+                self.console.print("[yellow]🔍 Usage: /semantic <search_query>[/yellow]")
+                self.console.print("[dim]Example: /semantic my thoughts on coding[/dim]")
+                return True
+
+            # Check if semantic search is available
+            if not hasattr(self.agent, 'semantic_search_engine') or not self.agent.semantic_search_engine:
+                self.console.print("[yellow]📚 Semantic search is not available. Try regular search instead.[/yellow]")
+                return True
+
+            with self.console.status(f"[bold blue]Searching semantically for '{query}'...", spinner="dots"):
+                # Perform semantic search
+                search_results = await self.agent.semantic_search_engine.search_with_fallback(query, limit=5)
+
+            if search_results:
+                self.console.print(f"[green]🔍 Found {len(search_results)} semantic search results:[/green]\n")
+
+                for i, result in enumerate(search_results, 1):
+                    # Format each result
+                    score_color = "green" if result.similarity_score > 0.8 else "yellow" if result.similarity_score > 0.6 else "white"
+
+                    self.console.print(f"[bold]{i}. {result.chunk.page_title}[/bold]")
+                    self.console.print(f"   [dim]Score: [{score_color}]{result.similarity_score:.3f}[/{score_color}] | Type: {result.search_type}[/dim]")
+
+                    # Show content preview
+                    content_preview = result.chunk.content[:200] + "..." if len(result.chunk.content) > 200 else result.chunk.content
+                    self.console.print(f"   {content_preview}\n")
+            else:
+                self.console.print(f"[yellow]🔍 No semantic search results found for '{query}'[/yellow]")
+                self.console.print("[dim]💡 Try different keywords or check if content is indexed[/dim]")
+
+            return True
+
+        except Exception as e:
+            self.console.print(f"[red]❌ Error performing semantic search: {e}[/red]")
+            return True
+
+    async def _show_semantic_stats(self) -> bool:
+        """Show semantic search statistics."""
+        try:
+            # Check if semantic search is available
+            if not hasattr(self.agent, 'semantic_search_engine') or not self.agent.semantic_search_engine:
+                self.console.print("[yellow]📚 Semantic search is not available.[/yellow]")
+                return True
+
+            with self.console.status("[bold blue]Getting semantic search statistics...", spinner="dots"):
+                stats = self.agent.semantic_search_engine.get_search_stats()
+
+            # Display stats in a formatted way
+            self.console.print("[bold blue]📊 Semantic Search Statistics[/bold blue]\n")
+
+            # Search stats
+            self.console.print(f"🔍 Total searches: {stats.get('total_searches', 0)}")
+            self.console.print(f"🔀 Hybrid searches: {stats.get('hybrid_searches', 0)}")
+
+            # Embedding stats
+            embedding_stats = stats.get('embedding_stats', {})
+            self.console.print(f"🤖 API calls: {embedding_stats.get('api_calls', 0)}")
+            self.console.print(f"🎯 Cache hit rate: {embedding_stats.get('cache_hit_rate', 0):.1f}%")
+
+            # Settings
+            settings = stats.get('settings', {})
+            self.console.print(f"⚙️ Semantic threshold: {settings.get('semantic_threshold', 0)}")
+            self.console.print(f"⚖️ Hybrid weight: {settings.get('hybrid_weight', 0)}")
+            self.console.print(f"📏 Chunk size: {settings.get('chunk_size', 0)}")
+
+            return True
+
+        except Exception as e:
+            self.console.print(f"[red]❌ Error getting semantic search stats: {e}[/red]")
+            return True
+
+    async def _reset_semantic_index(self) -> bool:
+        """Reset the semantic search index."""
+        try:
+            # Check if semantic search is available
+            if not hasattr(self.agent, 'semantic_search_engine') or not self.agent.semantic_search_engine:
+                self.console.print("[yellow]📚 Semantic search is not available.[/yellow]")
+                return True
+
+            # Confirm action
+            self.console.print("[yellow]⚠️ This will delete all indexed content. Are you sure? (y/N)[/yellow]")
+            response = input().strip().lower()
+
+            if response in ['y', 'yes']:
+                with self.console.status("[bold red]Resetting semantic search index...", spinner="dots"):
+                    await self.agent.semantic_search_engine.reset_index()
+
+                self.console.print("[green]✅ Semantic search index reset successfully[/green]")
+            else:
+                self.console.print("[dim]Reset cancelled[/dim]")
+
+            return True
+
+        except Exception as e:
+            self.console.print(f"[red]❌ Error resetting semantic search index: {e}[/red]")
+            return True
 
 
 async def run_cli() -> None:

@@ -382,9 +382,35 @@ class LoggedFunction:
             return wrapper
 
 
-# Convenience decorator instances
-logged = LoggedFunction()
-logged_with_args = LoggedFunction(log_args=True)
+# Convenience decorator instances and functions
+def logged(func_or_message=None, log_args=False):
+    """
+    Decorator for automatic function logging.
+
+    Can be used in two ways:
+    1. @logged - Simple decorator without parameters
+    2. @logged("Custom message") - Decorator with custom logger name
+
+    Args:
+        func_or_message: Either a function (when used without parentheses)
+                        or a string message (when used with parentheses)
+        log_args: Whether to log function arguments
+
+    Returns:
+        Decorated function or decorator instance
+    """
+    # If called without parentheses: @logged
+    if callable(func_or_message):
+        return LoggedFunction(logger_name=None, log_args=log_args)(func_or_message)
+
+    # If called with parentheses: @logged("message") or @logged()
+    def decorator(func):
+        logger_name = func_or_message if isinstance(func_or_message, str) else None
+        return LoggedFunction(logger_name=logger_name, log_args=log_args)(func)
+
+    return decorator
+
+logged_with_args = lambda func_or_message=None: logged(func_or_message, log_args=True)
 
 
 if __name__ == "__main__":

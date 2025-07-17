@@ -52,7 +52,7 @@
   - ChromaDB for efficient vector storage and similarity search
   - Hybrid search combining semantic and keyword approaches
   - Intelligent content chunking with LangChain text splitters
-  - Performance target: sub-second search response times
+  - Performance target: under 5 seconds search response times
 - **Implementation Strategy**:
   - Phase 1: Core embedding and vector storage infrastructure
   - Phase 2: Intelligent query processing and hybrid search

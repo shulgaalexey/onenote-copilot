@@ -44,7 +44,7 @@ A semantic search enhancement system with:
 - [ ] Search queries like "vibe coding" return relevant content about coding philosophy
 - [ ] Agent autonomously expands searches when needed instead of suggesting user changes
 - [ ] Semantic search integrates seamlessly with existing keyword search
-- [ ] Vector storage is efficient and responsive (sub-second search times)
+- [ ] Vector storage is efficient and responsive (under 5 seconds search times)
 - [ ] System handles large OneNote repositories without performance degradation
 
 ## All Needed Context
@@ -147,7 +147,7 @@ CACHE_EMBEDDINGS=true
 ```
 
 ### Technical Performance Requirements
-- Vector search response time: < 1 second for typical queries
+- Vector search response time: < 5 second for typical queries
 - Embedding generation: Batch processing for efficiency
 - Memory usage: < 500MB for moderate OneNote repositories
 - Storage: Efficient compression for embedding vectors
@@ -271,7 +271,7 @@ async def suggest_alternatives(query: str, results: List) -> List[str]
 - [ ] Query processing enhances user queries effectively
 
 ### Performance Requirements
-- [ ] Search response time < 1 second for 95% of queries
+- [ ] Search response time < 5 seconds for 95% of queries
 - [ ] Embedding generation processes pages efficiently in batches
 - [ ] Memory usage remains under 500MB for typical repositories
 - [ ] Vector database scales to 10,000+ embedded chunks

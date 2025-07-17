@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from ..config.logging import log_performance, logged
 from ..config.settings import get_settings
-from ..models.onenote import OneNotePage
+from ..models.onenote import EmbeddedChunk, OneNotePage
 from ..search.content_chunker import ContentChunker
 from ..search.embeddings import EmbeddingGenerator
 from ..storage.embedding_cache import EmbeddingCache
@@ -460,3 +460,30 @@ class ContentIndexer:
             Set of page IDs that have been indexed
         """
         return self._indexed_pages.copy()
+
+    async def store_page_embeddings(self, page_id: str, embedded_chunks: List[EmbeddedChunk]) -> None:
+        """
+        Store embeddings for a page directly in the vector database.
+
+        Args:
+            page_id: The OneNote page ID
+            embedded_chunks: List of embedded chunks with metadata
+
+        Raises:
+            ContentIndexerError: If storage fails
+        """
+        try:
+            logger.debug(f"Storing {len(embedded_chunks)} embeddings for page {page_id}")
+
+            # Store embeddings in vector store
+            await self.vector_store.store_embeddings(embedded_chunks)
+
+            # Update tracking
+            self._indexed_pages.add(page_id)
+            self._chunks_created += len(embedded_chunks)
+
+            logger.info(f"Successfully stored {len(embedded_chunks)} embeddings for page {page_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to store embeddings for page {page_id}: {e}")
+            raise ContentIndexerError(f"Failed to store embeddings: {e}")

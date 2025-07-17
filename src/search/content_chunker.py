@@ -172,6 +172,80 @@ class ContentChunker:
         logger.info(f"Generated {len(chunks)} chunks for page '{page.title}'")
         return chunks
 
+    @logged("Generate chunks from raw content")
+    async def chunk_content(self, content: str, source_id: str, metadata: dict) -> List[ContentChunk]:
+        """
+        Generate content chunks from raw content string.
+
+        Args:
+            content: Raw content to chunk
+            source_id: Source identifier for the content
+            metadata: Metadata to attach to chunks
+
+        Returns:
+            List of content chunks
+
+        Raises:
+            ValueError: If content is invalid
+        """
+        if not content or not content.strip():
+            logger.warning("Empty or whitespace-only content provided")
+            return []
+
+        # Clean content
+        cleaned_content = self._clean_content(content)
+        if not cleaned_content:
+            logger.warning("Content became empty after cleaning")
+            return []
+
+        # Generate text chunks using the text splitter
+        text_chunks = self.text_splitter.split_text(cleaned_content)
+
+        if not text_chunks:
+            logger.warning("No chunks generated from content")
+            return []
+
+        # Convert to ContentChunk objects
+        chunks = []
+        current_position = 0
+
+        for i, chunk_text in enumerate(text_chunks):
+            chunk_id = str(uuid.uuid4())
+
+            # Calculate positions
+            start_pos = current_position
+            end_pos = start_pos + len(chunk_text)
+            current_position = end_pos
+
+            # Create chunk metadata
+            chunk_metadata = {
+                **metadata,
+                'chunk_index': i,
+                'chunk_id': chunk_id,
+                'source_id': source_id,
+                'chunk_size': len(chunk_text),
+                'chunk_type': 'content'
+            }
+
+            chunk = ContentChunk(
+                id=chunk_id,
+                content=chunk_text,
+                metadata=chunk_metadata,
+                page_id=source_id,
+                page_title=metadata.get('title', 'Unknown'),
+                chunk_index=i,
+                start_position=start_pos,
+                end_position=end_pos
+            )
+            chunks.append(chunk)
+
+        # Apply chunk limit if configured
+        if hasattr(self.settings, 'max_chunks_per_page') and self.settings.max_chunks_per_page > 0:
+            chunks = chunks[:self.settings.max_chunks_per_page]
+
+        logger.info(f"Generated {len(chunks)} chunks from raw content")
+        return chunks
+
     @logged("Generate content chunks from multiple pages")
     def chunk_multiple_pages(self, pages: List[OneNotePage]) -> List[ContentChunk]:
         """

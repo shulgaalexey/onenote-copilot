@@ -15,7 +15,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..config.logging import log_api_call, log_performance, logged
 from ..config.settings import get_settings
-from ..models.onenote import ContentChunk, EmbeddedChunk
+from ..models.onenote import ContentChunk, EmbeddedChunk, OneNotePage
 
 logger = logging.getLogger(__name__)
 
@@ -318,3 +318,53 @@ class EmbeddingGenerator:
         except Exception as e:
             logger.error(f"Embedding API connection test failed: {e}")
             return False
+
+    async def embed_onenote_page(self, page: OneNotePage, content: str) -> List[EmbeddedChunk]:
+        """
+        Generate embeddings for a OneNote page with content chunking.
+
+        Args:
+            page: OneNote page object with metadata
+            content: Page content text
+
+        Returns:
+            List of embedding dictionaries with metadata for vector storage
+
+        Raises:
+            EmbeddingError: If embedding generation fails
+        """
+        try:
+            logger.debug(f"Generating embeddings for page: {page.title} ({page.id})")
+
+            # Import content chunker here to avoid circular imports
+            from ..search.content_chunker import ContentChunker
+
+            # Initialize content chunker
+            chunker = ContentChunker(self.settings)
+
+            # Create content chunks from page content
+            chunks = await chunker.chunk_content(
+                content=content,
+                source_id=page.id,
+                metadata={
+                    'page_id': page.id,
+                    'title': page.title,
+                    'created_time': getattr(page, 'created_time', None),
+                    'last_modified_time': getattr(page, 'last_modified_time', None),
+                    'web_url': getattr(page, 'web_url', None)
+                }
+            )
+
+            if not chunks:
+                logger.warning(f"No chunks created for page {page.id}")
+                return []
+
+            # Generate embeddings for chunks
+            embedded_chunks = await self.embed_content_chunks(chunks)
+
+            logger.info(f"Generated {len(embedded_chunks)} embeddings for page {page.id}")
+            return embedded_chunks
+
+        except Exception as e:
+            logger.error(f"Failed to generate embeddings for page {page.id}: {e}")
+            raise EmbeddingError(f"Failed to embed page content: {e}")

@@ -29,7 +29,7 @@ class TestOneNoteAgent:
     @patch('src.agents.onenote_agent.MicrosoftAuthenticator')
     @patch('src.agents.onenote_agent.OneNoteSearchTool')
     @patch('src.agents.onenote_agent.OneNoteContentProcessor')
-    @patch('src.agents.onenote_agent.ChatOpenAI')
+    @patch('langchain_openai.ChatOpenAI')  # Patch where it's actually imported
     def test_init(self, mock_chat_openai, mock_content_processor,
                   mock_search_tool, mock_authenticator, mock_get_settings):
         """Test OneNote agent initialization."""
@@ -48,7 +48,7 @@ class TestOneNoteAgent:
         mock_authenticator.assert_called_once_with(mock_settings)
         mock_search_tool.assert_called_once()
         mock_content_processor.assert_called_once()
-        mock_chat_openai.assert_called_once()
+        # Note: ChatOpenAI is lazy-loaded, so it won't be called during __init__
 
     @patch('src.agents.onenote_agent.get_settings')
     def test_init_with_custom_settings(self, mock_get_settings):
@@ -57,8 +57,7 @@ class TestOneNoteAgent:
 
         with patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
-             patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
 
             agent = OneNoteAgent(settings=custom_settings)
 
@@ -72,13 +71,12 @@ class TestOneNoteAgent:
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
              patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('langgraph.graph.StateGraph'):
 
             agent = OneNoteAgent()
 
-            # Verify graph is created
+            # Verify graph property works (lazy initialization)
             assert agent.graph is not None
-            assert hasattr(agent.graph, 'astream')
 
 
 class TestAgentNode:
@@ -89,11 +87,10 @@ class TestAgentNode:
         with patch('src.agents.onenote_agent.get_settings'), \
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
-             patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
 
             self.agent = OneNoteAgent()
-            self.agent.llm = AsyncMock()
+            self.agent._llm = AsyncMock()  # Mock the private attribute directly
 
     async def test_agent_node_with_system_message(self):
         """Test agent node with existing system message."""

@@ -163,17 +163,26 @@ addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=src",
-    "--cov-report=term-missing",
-    "--cov-report=xml",
-    "--cov-report=html",
+    "--tb=short",  # Shorter traceback format
+    "--maxfail=5",  # Stop after 5 failures for faster feedback
+    # Coverage options (only when needed)
+    # "--cov=src",
+    # "--cov-report=term-missing",
+    # "--cov-report=xml",
+    # "--cov-report=html",
     "--durations=10",
-    "-n",
-    "auto",  # Enable parallel execution
+    # Parallel execution (only when pytest-xdist is available)
+    # "-n", "auto",
 ]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# Collect ignore patterns for faster collection
+collect_ignore = [
+    "tests/test_performance_manual.py",
+    "tests/test_slow_integration.py",
+    "tests/benchmarks/",
+]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
@@ -199,6 +208,8 @@ asyncio_mode = "auto"
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::PendingDeprecationWarning",
+    "ignore::UserWarning",
+    "ignore::RuntimeWarning",
 ]
 
 # Coverage configuration

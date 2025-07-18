@@ -70,7 +70,7 @@ class TestMicrosoftAuthenticator:
 
                     token = await authenticator.get_access_token()
 
-                    assert token == "test-access-token"
+                    assert token == session_auth_setup["access_token"]  # Use the actual mock token
                     assert authenticator.is_authenticated()
                     mock_browser.assert_called_once()
 

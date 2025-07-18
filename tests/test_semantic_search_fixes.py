@@ -47,8 +47,26 @@ class TestEmbeddingGeneratorFixes:
             assert generator.client is None
 
     @pytest.mark.asyncio
-    async def test_generate_embedding_with_no_client(self):
-        """Test that generate_embedding fails gracefully when client is None."""
+    @pytest.mark.slow
+    async def test_generate_embedding_with_no_client_original(self):
+        """Test that generate_embedding fails gracefully when client is None - original slow version."""
+        with patch('src.config.settings.get_settings') as mock_settings:
+            settings = MagicMock()
+            settings.openai_api_key.get_secret_value.return_value = ""
+            mock_settings.return_value = settings
+
+            generator = EmbeddingGenerator(settings)
+
+            # Should raise EmbeddingError when client is None
+            with pytest.raises(EmbeddingError) as exc_info:
+                await generator.generate_embedding("test content")
+
+            assert "OpenAI client is not initialized" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    @pytest.mark.fast
+    async def test_generate_embedding_with_no_client(self, mock_network_delays):
+        """Test that generate_embedding fails gracefully when client is None - fast version."""
         with patch('src.config.settings.get_settings') as mock_settings:
             settings = MagicMock()
             settings.openai_api_key.get_secret_value.return_value = ""

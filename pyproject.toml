@@ -158,6 +158,7 @@ disallow_incomplete_defs = false
 # Pytest configuration
 [tool.pytest.ini_options]
 minversion = "8.0"
+testpaths = ["tests/"]
 addopts = [
     "-ra",
     "--strict-markers",
@@ -166,8 +167,10 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=xml",
     "--cov-report=html",
+    "--durations=10",
+    "-n",
+    "auto",  # Enable parallel execution
 ]
-testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -175,8 +178,14 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "fast: Quick tests that run in <0.1s",
+    "network: Tests that require network access",
 ]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
 
 # Coverage configuration
 [tool.coverage.run]

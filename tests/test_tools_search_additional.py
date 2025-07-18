@@ -89,8 +89,25 @@ class TestOneNoteSearchToolAdditional:
             assert "Search operation failed" in str(exc_info.value)
 
     @pytest.mark.asyncio
-    async def test_search_pages_timeout_error(self, search_tool):
-        """Test search_pages handles timeout errors."""
+    @pytest.mark.slow
+    async def test_search_pages_timeout_error_original(self, search_tool):
+        """Test search_pages handles timeout errors - original slow version."""
+        search_tool.authenticator.get_valid_token = AsyncMock(return_value="test_token")
+
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = Mock()
+            mock_client.get = AsyncMock(side_effect=asyncio.TimeoutError("Request timeout"))
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            with pytest.raises(OneNoteSearchError) as exc_info:
+                await search_tool.search_pages("test query")
+
+            assert "Search operation failed" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    @pytest.mark.fast
+    async def test_search_pages_timeout_error(self, search_tool, mock_network_delays):
+        """Test search_pages handles timeout errors - fast version."""
         search_tool.authenticator.get_valid_token = AsyncMock(return_value="test_token")
 
         with patch('httpx.AsyncClient') as mock_client_class:
@@ -275,24 +292,32 @@ class TestOneNoteSearchToolAdditional:
 
             return mock_response
 
+    @pytest.mark.asyncio
+    @pytest.mark.slow
+    async def test_search_pages_rate_limiting_retry_original(self, search_tool):
+        """Test search_pages rate limiting and retries - original slow version."""
+        search_tool.authenticator.get_valid_token = AsyncMock(return_value="test_token")
+
+        call_count = 0
+
+        def mock_get_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_response = Mock()
+            if call_count <= 2:
+                # First two calls return 429 (rate limited)
+                mock_response.status_code = 429
+                mock_response.headers = {"Retry-After": "1"}
+                mock_response.json.return_value = {"error": {"message": "Rate limited"}}
+                mock_response.text = "Rate limited"
+            else:
+                # Third call succeeds
+                mock_response.status_code = 200
+                mock_response.json.return_value = {"value": []}  # Empty results but valid format
+            return mock_response
+
         with patch('httpx.AsyncClient') as mock_client_class, \
              patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-
-            def mock_get_side_effect(*args, **kwargs):
-                nonlocal call_count
-                call_count += 1
-                mock_response = Mock()
-                if call_count <= 2:
-                    # First two calls return 429 (rate limited)
-                    mock_response.status_code = 429
-                    mock_response.headers = {"Retry-After": "1"}
-                    mock_response.json.return_value = {"error": {"message": "Rate limited"}}
-                    mock_response.text = "Rate limited"
-                else:
-                    # Third call succeeds
-                    mock_response.status_code = 200
-                    mock_response.json.return_value = {"value": []}  # Empty results but valid format
-                return mock_response
 
             mock_client = Mock()
             mock_client.get = AsyncMock(side_effect=mock_get_side_effect)
@@ -303,6 +328,42 @@ class TestOneNoteSearchToolAdditional:
             # Should have made multiple calls due to retries and eventually succeeded
             assert call_count >= 3  # At least 3 calls should have been made
             assert mock_sleep.call_count >= 2  # Should have slept at least twice for rate limits
+            assert isinstance(result, SearchResult)
+
+    @pytest.mark.asyncio
+    @pytest.mark.fast
+    async def test_search_pages_rate_limiting_retry(self, search_tool, mock_network_delays):
+        """Test search_pages rate limiting and retries - fast version."""
+        search_tool.authenticator.get_valid_token = AsyncMock(return_value="test_token")
+
+        call_count = 0
+
+        def mock_get_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_response = Mock()
+            if call_count <= 2:
+                # First two calls return 429 (rate limited)
+                mock_response.status_code = 429
+                mock_response.headers = {"Retry-After": "1"}
+                mock_response.json.return_value = {"error": {"message": "Rate limited"}}
+                mock_response.text = "Rate limited"
+            else:
+                # Third call succeeds
+                mock_response.status_code = 200
+                mock_response.json.return_value = {"value": []}  # Empty results but valid format
+            return mock_response
+
+        with patch('httpx.AsyncClient') as mock_client_class:
+            mock_client = Mock()
+            mock_client.get = AsyncMock(side_effect=mock_get_side_effect)
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            result = await search_tool.search_pages("test query")
+
+            # Should have made multiple calls due to retries and eventually succeeded
+            assert call_count >= 3  # At least 3 calls should have been made
+            # In the fast version, sleep is mocked so we can't check call count
             assert isinstance(result, SearchResult)
 
     @pytest.mark.asyncio

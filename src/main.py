@@ -50,11 +50,46 @@ __version__ = "1.0.0"
 
 def show_system_info() -> None:
     """Display system and environment information."""
+    import asyncio
+
+    from .auth.microsoft_auth import MicrosoftAuthenticator
+
     settings = get_settings()
+
+    # Try to get user information
+    user_info_text = ""
+    try:
+        # Check if user is authenticated and get profile
+        authenticator = MicrosoftAuthenticator(settings)
+
+        # Run async method in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            if authenticator.is_authenticated():
+                user_profile = loop.run_until_complete(authenticator.get_user_profile())
+                if user_profile:
+                    display_name = user_profile.get('displayName', 'Not available')
+                    user_principal_name = user_profile.get('userPrincipalName', 'Not available')
+                    user_info_text = f"""
+**Authenticated User:**
+- Display Name: {display_name}
+- Email: {user_principal_name}
+"""
+                else:
+                    user_info_text = "\n**Authenticated User:** Failed to retrieve profile\n"
+            else:
+                user_info_text = "\n**Authenticated User:** Not authenticated\n"
+        finally:
+            loop.close()
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.debug(f"Failed to get user info for display: {e}")
+        user_info_text = "\n**Authenticated User:** Error retrieving information\n"
 
     info_text = f"""
 **OneNote Copilot v{__version__}**
-
+{user_info_text}
 **System Information:**
 - Python: {sys.version.split()[0]}
 - Platform: {sys.platform}

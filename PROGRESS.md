@@ -1,5 +1,22 @@
 # Progress Log
 
+## 2025-07-18: Enhanced --info Command with User Information ✅ IMPLEMENTED
+- **Task**: Add currently authenticated user information to the output of the `--info` command
+- **Status**: ✅ IMPLEMENTED
+- **Implementation**:
+  - ✅ Added `get_user_profile()` method to `MicrosoftAuthenticator` class
+  - ✅ Updated `show_system_info()` function to include authenticated user details
+  - ✅ Added proper error handling and async context management
+  - ✅ Displays user's display name and email when authenticated
+- **Files Modified**:
+  - `src/auth/microsoft_auth.py` - Added `get_user_profile()` method
+  - `src/main.py` - Enhanced `show_system_info()` with user information
+- **User Experience**: The `--info` command now shows:
+  - User's display name and email (when authenticated)
+  - Authentication status
+  - All existing system and configuration information
+- **Next Steps**: Ready for testing and validation
+
 ## 2025-07-18: Authentication Error Investigation ✅ RESOLVED
 - **Issue**: Authentication Failed - Error: server_error in browser after user logout
 - **Status**: ✅ RESOLVED - Implemented comprehensive fix

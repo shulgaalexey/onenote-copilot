@@ -637,6 +637,42 @@ class MicrosoftAuthenticator:
             logger.error(f"❌ Failed to force clear authentication state: {e}")
             return False
 
+    async def get_user_profile(self) -> Optional[Dict[str, Any]]:
+        """
+        Get detailed user profile information from Microsoft Graph API.
+
+        Returns:
+            User profile information if available, None otherwise
+        """
+        try:
+            if not self.is_authenticated():
+                logger.debug("User not authenticated, cannot get profile")
+                return None
+
+            # Use the existing access token
+            headers = {
+                "Authorization": f"Bearer {self._access_token}",
+                "Content-Type": "application/json"
+            }
+
+            async with httpx.AsyncClient(timeout=self.settings.request_timeout) as client:
+                response = await client.get(
+                    self.settings.get_graph_endpoint("/me"),
+                    headers=headers
+                )
+
+                if response.status_code == 200:
+                    user_profile = response.json()
+                    logger.debug(f"Retrieved user profile for: {user_profile.get('displayName', 'unknown')}")
+                    return user_profile
+                else:
+                    logger.warning(f"Failed to get user profile: HTTP {response.status_code}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"Error getting user profile: {e}")
+            return None
+
 
 class AuthenticationError(Exception):
     """Exception raised when authentication fails."""

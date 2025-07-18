@@ -448,6 +448,167 @@ def index(
         raise typer.Exit(1)
 
 
+@app.command()
+def logout(
+    clear_logs: bool = typer.Option(
+        False,
+        "--clear-logs",
+        help="🗑️ Also clear application logs"
+    ),
+    keep_vector_db: bool = typer.Option(
+        False,
+        "--keep-vector-db",
+        help="💾 Keep vector database (don't clear indexed content)"
+    ),
+    keep_cache: bool = typer.Option(
+        False,
+        "--keep-cache",
+        help="💾 Keep embedding cache"
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="🚨 Force logout without confirmation"
+    ),
+    status_only: bool = typer.Option(
+        False,
+        "--status",
+        help="📊 Show logout status without performing logout"
+    )
+) -> None:
+    """
+    🔓 Logout current user and clear all user data.
+
+    This command performs a complete logout by:
+    - Clearing authentication tokens and session data
+    - Removing vector database with indexed OneNote content
+    - Clearing embedding cache to free up space
+    - Removing temporary files and caches
+
+    This allows another user to login with a clean slate.
+
+    **Data Cleared by Default:**
+    - Authentication tokens and MSAL cache
+    - Vector database (all indexed OneNote content)
+    - Embedding cache (stored embeddings)
+    - Temporary files and caches
+
+    **Optional Data Clearing:**
+    - Application logs (use --clear-logs)
+
+    **Preserve Data:**
+    - Use --keep-vector-db to preserve indexed content
+    - Use --keep-cache to preserve embedding cache
+
+    **Examples:**
+    - Full logout: `onenote-copilot logout`
+    - Check what will be cleared: `onenote-copilot logout --status`
+    - Logout but keep indexed content: `onenote-copilot logout --keep-vector-db`
+    - Force logout without confirmation: `onenote-copilot logout --force`
+    - Logout and clear logs: `onenote-copilot logout --clear-logs`
+    """
+    # Initialize logging first
+    settings = get_settings()
+    setup_logging(
+        console=console,
+        clear_log_file=False,  # Don't clear logs for command-only execution
+        console_level=settings.log_level,
+        file_level="DEBUG"
+    )
+
+    # Import LogoutService after logging is initialized
+    from .commands.logout import LogoutService
+
+    try:
+        logout_service = LogoutService()
+
+        if status_only:
+            # Show logout status
+            console.print("[blue]📊 Checking user data status...[/blue]")
+            status = asyncio.run(logout_service.get_logout_status())
+
+            from rich.table import Table
+            table = Table(title="User Data Status", border_style="blue")
+            table.add_column("Data Type", style="bold")
+            table.add_column("Status", style="cyan")
+            table.add_column("Details", style="dim")
+
+            # Authentication status
+            auth_status = "✅ Active" if status["authentication"]["token_cache_exists"] else "❌ None"
+            auth_details = f"{status['authentication']['cache_file_size']} bytes" if status["authentication"]["token_cache_exists"] else "No cache file"
+            table.add_row("Authentication", auth_status, auth_details)
+
+            # Vector database status
+            db_status = "✅ Exists" if status["vector_database"]["exists"] else "❌ None"
+            db_details = f"{status['vector_database']['total_embeddings']} embeddings, {status['vector_database']['storage_size_mb']:.1f} MB" if status["vector_database"]["exists"] else "No database"
+            table.add_row("Vector Database", db_status, db_details)
+
+            # Cache status
+            cache_status = "✅ Exists" if status["embedding_cache"]["exists"] else "❌ None"
+            cache_details = f"{status['embedding_cache']['cache_entries']} entries" if status["embedding_cache"]["exists"] else "No cache"
+            table.add_row("Embedding Cache", cache_status, cache_details)
+
+            # Temporary files
+            temp_status = "✅ Found" if status["temporary_files"]["count"] > 0 else "❌ None"
+            temp_details = f"{status['temporary_files']['count']} files, {status['temporary_files']['total_size_mb']:.1f} MB" if status["temporary_files"]["count"] > 0 else "No temp files"
+            table.add_row("Temporary Files", temp_status, temp_details)
+
+            console.print(table)
+            console.print("\n[dim]💡 Use 'onenote-copilot logout' to clear user data for new login[/dim]")
+            return
+
+        # Show what will be cleared
+        console.print("[yellow]🔓 Preparing to logout current user...[/yellow]")
+
+        operations = []
+        if not keep_vector_db:
+            operations.append("Vector database (indexed OneNote content)")
+        if not keep_cache:
+            operations.append("Embedding cache")
+        operations.extend([
+            "Authentication tokens and session data",
+            "Temporary files and caches"
+        ])
+        if clear_logs:
+            operations.append("Application logs")
+
+        console.print("\n[bold]The following data will be cleared:[/bold]")
+        for op in operations:
+            console.print(f"  • {op}")
+
+        if not force:
+            console.print(f"\n[yellow]⚠️  This action cannot be undone![/yellow]")
+            confirm = typer.confirm("Do you want to continue?")
+            if not confirm:
+                console.print("[blue]ℹ️  Logout cancelled by user[/blue]")
+                return
+
+        # Perform logout
+        console.print(f"\n[yellow]🔄 Logging out user and clearing data...[/yellow]")
+
+        success = asyncio.run(logout_service.logout_user(
+            clear_logs=clear_logs,
+            clear_vector_db=not keep_vector_db,
+            clear_embedding_cache=not keep_cache
+        ))
+
+        if success:
+            console.print(f"\n[green]✅ User logout completed successfully![/green]")
+            console.print(f"[dim]💡 Another user can now login with: onenote-copilot --auth-only[/dim]")
+        else:
+            console.print(f"\n[yellow]⚠️  Logout completed with some warnings[/yellow]")
+            console.print(f"[dim]Check logs for details about any failed operations[/dim]")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⏹️  Logout cancelled by user[/yellow]")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Logout command failed: {e}")
+        console.print(f"[red]❌ Logout failed: {e}[/red]")
+        raise typer.Exit(1)
+
+
 def cli_main() -> None:
     """
     Entry point for CLI execution.

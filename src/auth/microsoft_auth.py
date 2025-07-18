@@ -514,6 +514,47 @@ class MicrosoftAuthenticator:
         except Exception as e:
             logger.error(f"Failed to clear cache: {e}")
 
+    async def logout(self) -> bool:
+        """
+        Perform complete user logout and clear all authentication data.
+
+        This method:
+        - Clears the current access token and user session
+        - Removes MSAL token cache from memory and disk
+        - Resets the authenticator state
+
+        Returns:
+            True if logout was successful, False otherwise
+        """
+        try:
+            logger.info("Starting user logout process...")
+
+            # Clear current session data
+            self._access_token = None
+            self._current_account = None
+            self._token_expires_at = None
+
+            # Clear in-memory token cache
+            if self.app and hasattr(self.app.token_cache, 'clear'):
+                self.app.token_cache.clear()
+                logger.debug("Cleared in-memory token cache")
+
+            # Remove token cache file from disk
+            cache_file = self.settings.token_cache_path
+            if cache_file.exists():
+                cache_file.unlink()
+                logger.info(f"Removed token cache file: {cache_file}")
+
+            # Reset the MSAL app to ensure clean state
+            self.app = None
+
+            logger.info("✅ User logout completed successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to logout user: {e}")
+            return False
+
 
 class AuthenticationError(Exception):
     """Exception raised when authentication fails."""

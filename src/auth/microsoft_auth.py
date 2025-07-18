@@ -367,6 +367,19 @@ class MicrosoftAuthenticator:
                 error = auth_code_container.get("error")
                 error_desc = auth_code_container.get("error_description", "")
                 logger.error(f"OAuth2 error: {error} - {error_desc}")
+
+                # Provide specific guidance for server_error
+                if error == "server_error":
+                    logger.error("Microsoft server_error detected. This often indicates:")
+                    logger.error("1. Session conflict from previous user logout")
+                    logger.error("2. Browser cache issues with Microsoft authentication")
+                    logger.error("3. Timing issues with OAuth2 session cleanup")
+                    logger.error("Suggested fixes:")
+                    logger.error("- Clear browser cache for login.microsoftonline.com")
+                    logger.error("- Try incognito/private browsing mode")
+                    logger.error("- Wait 5-10 minutes for Microsoft session cleanup")
+                    logger.error("- Use: Remove-Item '$env:USERPROFILE\\.onenote_copilot' -Recurse -Force")
+
                 return None
 
         logger.error("Authentication timeout - no response received")
@@ -522,6 +535,7 @@ class MicrosoftAuthenticator:
         - Clears the current access token and user session
         - Removes MSAL token cache from memory and disk
         - Resets the authenticator state
+        - Provides guidance for complete session cleanup
 
         Returns:
             True if logout was successful, False otherwise
@@ -549,10 +563,78 @@ class MicrosoftAuthenticator:
             self.app = None
 
             logger.info("✅ User logout completed successfully")
+            logger.info("📋 To ensure complete session cleanup for next user:")
+            logger.info("   1. Clear browser cache for login.microsoftonline.com")
+            logger.info("   2. Consider using incognito/private browsing for next login")
+            logger.info("   3. If issues persist, wait 5-10 minutes for Microsoft session cleanup")
+
             return True
 
         except Exception as e:
             logger.error(f"❌ Failed to logout user: {e}")
+            return False
+
+    def force_clear_all_auth_state(self) -> bool:
+        """
+        Force clear all authentication state including cached tokens.
+
+        Use this method when experiencing authentication conflicts or server_error.
+        This is more aggressive than normal logout and clears all possible state.
+
+        Returns:
+            True if cleanup was successful, False otherwise
+        """
+        try:
+            logger.info("🔧 Force clearing all authentication state...")
+
+            # Clear in-memory state
+            self._access_token = None
+            self._current_account = None
+            self._token_expires_at = None
+            self.app = None
+
+            # Clear all possible cache locations
+            cache_locations = [
+                self.settings.token_cache_path,
+                Path.home() / ".onenote_copilot" / ".msal_token_cache.json",
+                Path.cwd() / ".onenote_copilot" / ".msal_token_cache.json"
+            ]
+
+            cleared_files = 0
+            for cache_path in cache_locations:
+                try:
+                    if cache_path.exists():
+                        cache_path.unlink()
+                        logger.info(f"Removed cache file: {cache_path}")
+                        cleared_files += 1
+                except Exception as e:
+                    logger.debug(f"Could not remove {cache_path}: {e}")
+
+            # Clear cache directories if empty
+            cache_dirs = [
+                Path.home() / ".onenote_copilot",
+                Path.cwd() / ".onenote_copilot"
+            ]
+
+            for cache_dir in cache_dirs:
+                try:
+                    if cache_dir.exists() and not any(cache_dir.iterdir()):
+                        cache_dir.rmdir()
+                        logger.info(f"Removed empty cache directory: {cache_dir}")
+                except Exception as e:
+                    logger.debug(f"Could not remove directory {cache_dir}: {e}")
+
+            logger.info(f"✅ Force cleanup completed. Cleared {cleared_files} cache files.")
+            logger.info("📋 Additional recommendations for server_error resolution:")
+            logger.info("   1. Clear browser data for *.microsoftonline.com")
+            logger.info("   2. Try authentication in incognito/private browsing mode")
+            logger.info("   3. Restart the browser completely")
+            logger.info("   4. Wait 5-10 minutes for Microsoft's session cleanup")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Failed to force clear authentication state: {e}")
             return False
 
 

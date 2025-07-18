@@ -609,6 +609,128 @@ def logout(
         raise typer.Exit(1)
 
 
+@app.command()
+def fix_auth(
+    force_clear: bool = typer.Option(
+        False,
+        "--force-clear",
+        help="🧹 Force clear all authentication state and cache files"
+    ),
+    show_guidance: bool = typer.Option(
+        True,
+        "--guidance/--no-guidance",
+        help="📋 Show troubleshooting guidance (default: True)"
+    )
+) -> None:
+    """
+    🔧 Fix authentication issues like 'server_error' after user logout.
+
+    This command helps resolve common authentication problems:
+    - OAuth2 server_error from Microsoft
+    - Session conflicts between users
+    - Stale authentication cache issues
+    - Browser authentication cookie conflicts
+
+    **What this command does:**
+    - Analyzes current authentication state
+    - Clears problematic cache files and state
+    - Provides specific guidance for the detected issues
+    - Offers browser-specific troubleshooting steps
+
+    **Common scenarios:**
+    - Use after getting "Authentication Failed - server_error" in browser
+    - Use when switching between different Microsoft accounts
+    - Use when authentication works in incognito but not regular browser
+    - Use when previous user logout didn't fully clear session
+
+    **Examples:**
+    - Analyze and fix: `onenote-copilot fix-auth`
+    - Force clear everything: `onenote-copilot fix-auth --force-clear`
+    - Fix without guidance: `onenote-copilot fix-auth --no-guidance`
+    """
+    # Initialize logging
+    settings = get_settings()
+    setup_logging(
+        console=console,
+        clear_log_file=False,
+        console_level=settings.log_level,
+        file_level="DEBUG"
+    )
+
+    logger = get_logger(__name__)
+
+    try:
+        console.print("[blue]🔧 Authentication Troubleshooting Tool[/blue]")
+        console.print("[dim]Analyzing authentication state and resolving issues...[/dim]\n")
+
+        # Initialize authenticator
+        authenticator = MicrosoftAuthenticator()
+
+        if force_clear:
+            console.print("[yellow]🧹 Force clearing all authentication state...[/yellow]")
+            success = authenticator.force_clear_all_auth_state()
+
+            if success:
+                console.print("[green]✅ Force clear completed successfully[/green]")
+            else:
+                console.print("[yellow]⚠️  Force clear completed with some warnings[/yellow]")
+        else:
+            # Analyze current state
+            console.print("[blue]📊 Analyzing authentication state...[/blue]")
+
+            # Check for common issues
+            cache_file = settings.token_cache_path
+            cache_exists = cache_file.exists()
+
+            if cache_exists:
+                cache_size = cache_file.stat().st_size
+                console.print(f"[yellow]⚠️  Found authentication cache: {cache_file} ({cache_size} bytes)[/yellow]")
+                console.print("[dim]This might contain stale session data causing conflicts[/dim]")
+
+                # Offer to clear it
+                if typer.confirm("Clear the authentication cache?"):
+                    authenticator.force_clear_all_auth_state()
+                    console.print("[green]✅ Authentication cache cleared[/green]")
+            else:
+                console.print("[green]✅ No stale authentication cache found[/green]")
+
+        if show_guidance:
+            console.print("\n" + "="*60)
+            console.print("[bold blue]📋 Authentication Troubleshooting Guidance[/bold blue]")
+            console.print("="*60)
+
+            console.print("\n[bold yellow]🚨 For 'server_error' issues:[/bold yellow]")
+            console.print("1. [cyan]Clear browser data[/cyan] for *.microsoftonline.com and *.live.com")
+            console.print("2. [cyan]Try incognito/private browsing[/cyan] mode for authentication")
+            console.print("3. [cyan]Restart your browser[/cyan] completely")
+            console.print("4. [cyan]Wait 5-10 minutes[/cyan] for Microsoft's session cleanup")
+
+            console.print("\n[bold yellow]🌐 Browser-specific steps:[/bold yellow]")
+            console.print("[dim]Chrome/Edge:[/dim] Settings → Privacy → Clear browsing data → Cookies and site data")
+            console.print("[dim]Firefox:[/dim] Settings → Privacy → Clear Data → Cookies and Site Data")
+            console.print("[dim]Safari:[/dim] Develop → Empty Caches, Safari → Clear History")
+
+            console.print("\n[bold yellow]🔄 If problems persist:[/bold yellow]")
+            console.print("1. [cyan]Use different browser[/cyan] or [cyan]incognito mode[/cyan]")
+            console.print("2. [cyan]Check network/firewall[/cyan] - corporate networks may block OAuth2")
+            console.print("3. [cyan]Verify port 8080[/cyan] is available: `netstat -an | findstr :8080`")
+            console.print("4. [cyan]Try again later[/cyan] - Microsoft OAuth2 servers may be temporarily unavailable")
+
+            console.print("\n[bold green]✅ Next steps:[/bold green]")
+            console.print("After applying fixes above, try: [cyan]onenote-copilot --auth-only[/cyan]")
+
+        console.print(f"\n[green]🎯 Authentication troubleshooting completed![/green]")
+        console.print(f"[dim]If issues persist, check the full troubleshooting guide: docs/AUTH_TROUBLESHOOTING.md[/dim]")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⏹️  Authentication troubleshooting cancelled[/yellow]")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger.error(f"Auth troubleshooting failed: {e}")
+        console.print(f"[red]❌ Authentication troubleshooting failed: {e}[/red]")
+        raise typer.Exit(1)
+
+
 def cli_main() -> None:
     """
     Entry point for CLI execution.

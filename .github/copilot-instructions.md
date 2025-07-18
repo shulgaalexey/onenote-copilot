@@ -109,6 +109,23 @@ Use the `TEST_RUN.md` file content to fix failing tests if any.
 
 Also when running the app in the terminal. **IT TAKES TIME TO START THE APP!!!**
 
+**📚 COMPREHENSIVE TEST SUITE DOCUMENTATION**:
+- **ALL developers (humans and AI assistants) MUST follow the testing best practices documented in `./docs/testing/`**
+- **MANDATORY reading**: `./docs/testing/TEST_SUITE_BEST_PRACTICES.md` - contains complete testing guidelines, optimization techniques, and daily workflows
+- **For troubleshooting**: `./docs/testing/TEST_SUITE_TROUBLESHOOTING.md` - comprehensive diagnostic procedures and solutions
+- **For new team members**: `./docs/testing/TEST_SUITE_TEAM_ONBOARDING.md` - complete onboarding guide
+- **For performance monitoring**: `./docs/testing/TEST_SUITE_PERFORMANCE_DASHBOARD.md` - performance tracking and optimization
+- **Complete documentation index**: `./docs/testing/TEST_SUITE_DOCUMENTATION_INDEX.md` - navigation to all testing resources
+- **Implementation guide**: `./docs/testing/COMPLETE_TEST_OPTIMIZATION_GUIDE.md` - comprehensive test suite optimization methodology
+- **Execution methodology**: `./docs/testing/TEST_RUN_APPROACH.md` - detailed testing execution approach
+
+**🔥 TESTING COMPLIANCE REQUIREMENTS**:
+- **BEFORE ANY CODE CHANGES**: Review relevant sections in `./docs/testing/TEST_SUITE_BEST_PRACTICES.md`
+- **AFTER ANY CODE CHANGES**: Run tests using the optimized test suite patterns documented in the testing folder
+- **FOR PERFORMANCE ISSUES**: Follow diagnostic procedures in `./docs/testing/TEST_SUITE_TROUBLESHOOTING.md`
+- **FOR NEW FEATURES**: Follow TDD patterns and optimization techniques from the testing documentation
+- **NO EXCEPTIONS**: These practices apply to ALL code development in this repository
+
 
 ### ✅ Task Completion
 - **Mark completed tasks in `TASK.md`** immediately after finishing them.

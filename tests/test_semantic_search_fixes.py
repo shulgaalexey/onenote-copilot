@@ -19,9 +19,12 @@ from src.search.relevance_ranker import RelevanceRanker
 from src.search.semantic_search import SemanticSearchEngine
 
 
+@pytest.mark.embedding
+@pytest.mark.unit
 class TestEmbeddingGeneratorFixes:
     """Test fixes for EmbeddingGenerator initialization and API calls."""
 
+    @pytest.mark.fast
     def test_embedding_generator_with_no_api_key(self):
         """Test that EmbeddingGenerator handles missing API key gracefully."""
         with patch('src.config.settings.get_settings') as mock_settings:

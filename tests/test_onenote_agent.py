@@ -18,9 +18,13 @@ from src.models.onenote import OneNotePage, SearchResult
 from src.models.responses import OneNoteSearchResponse, StreamingChunk
 
 
+@pytest.mark.agent
+@pytest.mark.unit
 class TestOneNoteAgent:
     """Test OneNote agent initialization and core functionality."""
 
+    @pytest.mark.fast
+    @pytest.mark.mock_heavy
     @patch('src.agents.onenote_agent.get_settings')
     @patch('src.agents.onenote_agent.MicrosoftAuthenticator')
     @patch('src.agents.onenote_agent.OneNoteSearchTool')

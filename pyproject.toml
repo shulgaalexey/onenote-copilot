@@ -180,6 +180,20 @@ markers = [
     "unit: marks tests as unit tests",
     "fast: Quick tests that run in <0.1s",
     "network: Tests that require network access",
+    # Phase 2: Advanced categorization markers
+    "auth: Authentication-related tests",
+    "search: Search functionality tests",
+    "embedding: Embedding generation tests",
+    "vector_store: Vector storage tests",
+    "cli: Command-line interface tests",
+    "agent: AI agent functionality tests",
+    "performance: Performance-sensitive tests",
+    "memory: Memory usage tests",
+    "database: Database operation tests",
+    "api: External API integration tests",
+    "mock_heavy: Tests that mock heavy dependencies",
+    "session_scoped: Tests using session-scoped fixtures",
+    "module_scoped: Tests using module-scoped fixtures",
 ]
 asyncio_mode = "auto"
 filterwarnings = [

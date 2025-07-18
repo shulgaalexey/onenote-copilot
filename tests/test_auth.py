@@ -16,9 +16,12 @@ from src.auth.microsoft_auth import (AuthenticationError, CallbackHandler,
                                      MicrosoftAuthenticator)
 
 
+@pytest.mark.auth
+@pytest.mark.unit
 class TestMicrosoftAuthenticator:
     """Test cases for MicrosoftAuthenticator class."""
 
+    @pytest.mark.fast
     def test_authenticator_initialization(self, mock_settings):
         """Test authenticator initialization with settings."""
         authenticator = MicrosoftAuthenticator(mock_settings)
@@ -29,7 +32,8 @@ class TestMicrosoftAuthenticator:
         assert not authenticator.is_authenticated()
 
     @pytest.mark.asyncio
-    async def test_successful_authentication_flow(self, mock_settings, temp_dir):
+    @pytest.mark.session_scoped
+    async def test_successful_authentication_flow(self, mock_settings, temp_dir, session_auth_setup):
         """Test successful OAuth2 authentication flow."""
         # Mock MSAL PublicClientApplication
         mock_app = Mock()
@@ -39,11 +43,11 @@ class TestMicrosoftAuthenticator:
             return_value="https://login.microsoftonline.com/auth?code=123"
         )
 
-        # Mock token response
+        # Use session auth setup for token response
         token_result = {
-            "access_token": "test-access-token",
-            "expires_in": 3600,
-            "token_type": "Bearer"
+            "access_token": session_auth_setup["access_token"],
+            "expires_in": session_auth_setup["expires_in"],
+            "token_type": session_auth_setup["token_type"]
         }
         mock_app.acquire_token_by_authorization_code = Mock(return_value=token_result)
         mock_app.token_cache = Mock()

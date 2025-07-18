@@ -17,9 +17,12 @@ from src.models.onenote import OneNotePage, SearchResult
 from src.tools.onenote_search import OneNoteSearchError, OneNoteSearchTool
 
 
+@pytest.mark.search
+@pytest.mark.unit
 class TestOneNoteSearchTool:
     """Test OneNote search tool functionality."""
 
+    @pytest.mark.fast
     def test_search_tool_initialization(self):
         """Test search tool initialization with defaults."""
         tool = OneNoteSearchTool()
@@ -30,6 +33,7 @@ class TestOneNoteSearchTool:
         assert tool.timeout > 0
         assert tool._request_count == 0
 
+    @pytest.mark.fast
     def test_search_tool_initialization_with_custom_auth(self):
         """Test search tool initialization with custom authenticator."""
         mock_auth = Mock(spec=MicrosoftAuthenticator)
@@ -46,6 +50,7 @@ class TestOneNoteSearchTool:
         assert tool.timeout == 30
 
     @pytest.mark.asyncio
+    @pytest.mark.fast
     async def test_search_pages_empty_query_validation(self):
         """Test that empty queries raise validation errors."""
         tool = OneNoteSearchTool()

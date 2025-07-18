@@ -72,12 +72,12 @@ class TestInfoCommandEnhancement:
 
     def test_show_system_info_includes_user_section(self):
         """Test that show_system_info includes user information section."""
-        with patch('src.main.MicrosoftAuthenticator') as mock_auth_class, \
+        with patch('src.auth.microsoft_auth.MicrosoftAuthenticator') as mock_auth_class, \
              patch('src.main.console') as mock_console, \
              patch('asyncio.new_event_loop') as mock_loop, \
              patch('asyncio.set_event_loop'), \
              patch('src.main.Panel') as mock_panel, \
-             patch('src.main.Markdown') as mock_markdown:
+             patch('rich.markdown.Markdown') as mock_markdown:
 
             # Setup mocks
             mock_auth = Mock()

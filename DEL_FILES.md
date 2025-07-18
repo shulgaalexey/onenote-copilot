@@ -11,6 +11,25 @@ This file tracks all files that have been deleted from the repository to maintai
 
 ## Deleted Files
 
+### 2025-07-18
+**File Path**: `prompts/PRPs/Semantic_Search_followup.md`
+- **Reason**: Documentation consolidation - merged into unified Semantic_Search_Enhancement.md
+- **Context**: Followup implementation plan document consolidated into master PRP
+- **Deleted by**: GitHub Copilot Agent
+- **Date**: 2025-07-18
+
+**File Path**: `Next_Enhancement_Roadmap.md`
+- **Reason**: Documentation consolidation - merged into unified Semantic_Search_Enhancement.md
+- **Context**: Post-completion roadmap consolidated into master PRP
+- **Deleted by**: GitHub Copilot Agent
+- **Date**: 2025-07-18
+
+**File Path**: `Phase2_Validation_Report.md`
+- **Reason**: Documentation consolidation - merged into unified Semantic_Search_Enhancement.md
+- **Context**: Validation report consolidated into master PRP completion summary
+- **Deleted by**: GitHub Copilot Agent
+- **Date**: 2025-07-18
+
 ### 2025-07-17
 **File**: `test_query_patterns.py`
 - **Reason**: Temporary test file for debugging query pattern recognition

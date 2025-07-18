@@ -286,10 +286,11 @@ class TestLoggingIntegration:
             try:
                 logger_system.setup_logging()
 
-                # Check that external loggers are set to WARNING level
+                # Check that external loggers are set to appropriate levels
                 assert logging.getLogger("httpx").level == logging.WARNING
                 assert logging.getLogger("urllib3").level == logging.WARNING
-                assert logging.getLogger("msal").level == logging.WARNING
+                # msal is intentionally set to INFO level to keep auth info visible
+                assert logging.getLogger("msal").level == logging.INFO
             finally:
                 # Cleanup file handlers to prevent Windows permission issues
                 logger_system.cleanup()
@@ -308,10 +309,15 @@ class TestLoggingIntegration:
             try:
                 logger_system.setup_logging()
 
-                # In debug mode, external loggers should not be suppressed
-                # (They should inherit the root logger level)
+                # In debug mode, external loggers are still controlled
+                # but some are more verbose than in normal mode
                 httpx_logger = logging.getLogger("httpx")
-                assert httpx_logger.level <= logging.DEBUG
+                # httpx is set to INFO level even in debug mode to reduce noise
+                assert httpx_logger.level == logging.INFO
+
+                # msal should be more verbose in debug mode
+                msal_logger = logging.getLogger("msal")
+                assert msal_logger.level == logging.DEBUG
             finally:
                 # Cleanup file handlers to prevent Windows permission issues
                 logger_system.cleanup()

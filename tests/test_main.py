@@ -142,6 +142,7 @@ class TestCheckDependencies:
 class TestAuthenticateOnly:
     """Test authentication-only functionality."""
 
+    @pytest.mark.asyncio
     @patch('src.main.get_logger')
     @patch('src.main.get_settings')
     @patch('src.main.MicrosoftAuthenticator')
@@ -166,6 +167,7 @@ class TestAuthenticateOnly:
         assert result is True
         mock_authenticator.get_access_token.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch('src.main.get_logger')
     @patch('src.main.get_settings')
     @patch('src.main.MicrosoftAuthenticator')
@@ -189,6 +191,7 @@ class TestAuthenticateOnly:
 
         assert result is False
 
+    @pytest.mark.asyncio
     @patch('src.main.get_logger')
     @patch('src.main.get_settings')
     @patch('src.main.MicrosoftAuthenticator')
@@ -211,6 +214,7 @@ class TestAuthenticateOnly:
 class TestRunMainApp:
     """Test main application runner functionality."""
 
+    @pytest.mark.asyncio
     @patch('src.main.get_logger')
     @patch('src.main.console.print')
     async def test_run_main_app_success(self, mock_print, mock_get_logger):
@@ -233,9 +237,11 @@ class TestRunMainApp:
 
                 mock_cli.start_chat.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch('src.main.get_logger')
+    @patch('src.cli.interface.OneNoteCLI')
     @patch('src.main.console.print')
-    async def test_run_main_app_debug_mode(self, mock_print, mock_get_logger):
+    async def test_run_main_app_debug_mode(self, mock_print, mock_cli_class, mock_get_logger):
         """Test main app execution with debug mode."""
         # Setup logger mock
         mock_logger = MagicMock()
@@ -254,6 +260,7 @@ class TestRunMainApp:
         mock_cli.start_chat.assert_called_once()
         mock_cli.get_conversation_summary.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch('src.main.get_logger')
     @patch('src.cli.interface.OneNoteCLI')
     @patch('src.main.console.print_exception')
@@ -275,6 +282,7 @@ class TestRunMainApp:
         mock_logger.error.assert_called_once()
         mock_print_exception.assert_called_once()
 
+    @pytest.mark.asyncio
     @patch('src.main.get_logger')
     @patch('src.cli.interface.OneNoteCLI')
     @patch('src.main.console.print_exception')

@@ -57,7 +57,7 @@ class TestOneNoteAgentAdditional:
         # Mock the LLM response
         mock_response = AIMessage(content="I couldn't find any pages matching your search.")
 
-        with patch.object(agent, 'llm') as mock_llm, \
+        with patch.object(agent, '_llm') as mock_llm, \
              patch('src.agents.onenote_agent.get_system_prompt', return_value="System prompt"), \
              patch('src.agents.onenote_agent.get_no_results_prompt', return_value="No results prompt"):
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)

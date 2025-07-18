@@ -8,7 +8,7 @@ initialization, tool nodes, routing logic, and streaming query processing.
 import asyncio
 import json
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -362,11 +362,16 @@ class TestUtilityMethods:
 
     def setup_method(self):
         """Set up test fixtures."""
-        with patch('src.agents.onenote_agent.get_settings'), \
+        with patch('src.agents.onenote_agent.get_settings') as mock_get_settings, \
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
              patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
              patch('langchain_openai.ChatOpenAI'):
+
+            # Mock settings to disable semantic search for predictable test behavior
+            mock_settings = Mock()
+            mock_settings.enable_hybrid_search = False
+            mock_get_settings.return_value = mock_settings
 
             self.agent = OneNoteAgent()
 
@@ -529,7 +534,8 @@ class TestPublicMethods:
             self.agent = OneNoteAgent()
             self.agent.authenticator = AsyncMock()
             self.agent.search_tool = AsyncMock()
-            self.agent.llm = AsyncMock()
+            # Mock the private _llm attribute instead of the property
+            self.agent._llm = AsyncMock()
 
     @pytest.mark.asyncio
 

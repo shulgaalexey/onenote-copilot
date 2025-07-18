@@ -557,7 +557,7 @@ class OneNoteAgent:
             "notes about", "pages about", "content about", "thoughts about",
             "what were my thoughts", "my thoughts on", "what did i think",
             "what was my", "thoughts on", "ideas about", "how did i",
-            "what did i", "tell me about", "explain", "describe",
+            "what did i", "tell me about", "describe",
             "what about", "information about", "details about", "data about",
             "anything about", "stuff about", "material about", "content on",
             "organise", "organize", "prepare", "preparation", "plan", "planning",

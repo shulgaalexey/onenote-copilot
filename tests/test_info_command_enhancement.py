@@ -104,7 +104,7 @@ class TestInfoCommandEnhancement:
              patch('asyncio.new_event_loop') as mock_loop, \
              patch('asyncio.set_event_loop'), \
              patch('src.main.Panel') as mock_panel, \
-             patch('src.main.Markdown') as mock_markdown:
+             patch('rich.markdown.Markdown') as mock_markdown:
 
             # Setup mocks to raise exception
             mock_auth_class.side_effect = Exception("Auth error")

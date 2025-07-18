@@ -48,6 +48,21 @@
   - User profile integration in `--info` command
   - Robust error handling for OAuth2 server errors
   - Troubleshooting documentation and recovery tools
+
+### 🐛 Performance Investigation & Fixes (July 18, 2025)
+- **Issue**: App startup takes several seconds with no feedback during `python -m src.main`
+- **Root Cause Found**: Heavy dependency imports in `check_dependencies()` function
+  - `import openai`: 10.5 seconds
+  - `import langchain_openai`: 7.7 seconds
+  - `import chromadb`: 5.9 seconds
+  - Total delay: ~25 seconds on first run
+- **Solutions Implemented**:
+  1. **Fixed Dependency Check**: Replaced direct imports with `importlib.util.find_spec()` (25s → 0.1s)
+  2. **Lazy Loading**: Made LangChain/OpenAI imports lazy in `OneNoteAgent`
+  3. **Progressive Feedback**: Added startup progress messages
+  4. **Lazy CLI Import**: Moved `OneNoteCLI` import to runtime
+- **Result**: Startup time improved from 25+ seconds to <1 second for quick commands
+- **Current PRP**: `prompts/commands/investigate-startup-performance.md`
   - Browser cache conflict resolution
 
 ### 📊 Production Readiness Achieved

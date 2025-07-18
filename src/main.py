@@ -23,9 +23,8 @@ from rich.panel import Panel
 from rich.traceback import install
 
 from .auth.microsoft_auth import MicrosoftAuthenticator
-from .cli.interface import OneNoteCLI
-from .commands.index_content import (cmd_index_all_content,
-                                     cmd_index_recent_content, cmd_show_status)
+# Lazy import: from .cli.interface import OneNoteCLI
+# Lazy import: from .commands.index_content import (cmd_index_all_content, cmd_index_recent_content, cmd_show_status)
 from .config.logging import get_logger, setup_logging
 from .config.settings import get_settings
 
@@ -159,43 +158,31 @@ async def authenticate_only() -> bool:
 
 def check_dependencies() -> bool:
     """
-    Check that all required dependencies are available.
+    Check that all required dependencies are available using importlib.
+    This avoids actually importing heavy modules during startup.
 
     Returns:
         True if all dependencies are available, False otherwise
     """
+    import importlib.util
+
     missing_deps = []
 
-    # Check critical dependencies
-    try:
-        import openai
-    except ImportError:
-        missing_deps.append("openai")
+    # List of critical dependencies to check
+    dependencies = [
+        "openai",
+        "msal",
+        "httpx",
+        "rich",
+        "langgraph",
+        "langchain_openai"
+    ]
 
-    try:
-        import msal
-    except ImportError:
-        missing_deps.append("msal")
-
-    try:
-        import httpx
-    except ImportError:
-        missing_deps.append("httpx")
-
-    try:
-        import rich
-    except ImportError:
-        missing_deps.append("rich")
-
-    try:
-        import langgraph
-    except ImportError:
-        missing_deps.append("langgraph")
-
-    try:
-        import langchain_openai
-    except ImportError:
-        missing_deps.append("langchain-openai")
+    # Check each dependency without importing it
+    for dep_name in dependencies:
+        spec = importlib.util.find_spec(dep_name)
+        if spec is None:
+            missing_deps.append(dep_name)
 
     if missing_deps:
         console.print("[red]❌ Missing required dependencies:[/red]")
@@ -262,6 +249,9 @@ def main(
         console.print(f"[bold blue]OneNote Copilot v{__version__}[/bold blue]")
         return
 
+    # Early startup indicator
+    console.print("[dim]🚀 Starting OneNote Copilot...[/dim]")
+
     # Setup comprehensive logging system early
     settings = get_settings()
     console_level = "DEBUG" if debug else settings.log_level
@@ -302,8 +292,7 @@ def main(
 
         # Start the main application
         try:
-            console.print("[bold blue]Starting OneNote Copilot...[/bold blue]")
-            console.print()
+            console.print("[bold blue]🚀 Starting OneNote Copilot...[/bold blue]")
 
             # Run the CLI interface
             logger.info("🎯 Starting main application interface...")
@@ -333,6 +322,9 @@ async def run_main_app(debug: bool = False) -> None:
 
     try:
         logger.info("🎬 Initializing OneNote CLI interface...")
+
+        # Lazy import of CLI to avoid heavy dependencies during startup
+        from .cli.interface import OneNoteCLI
 
         # Initialize and run CLI
         cli = OneNoteCLI()
@@ -456,6 +448,11 @@ def index(
     - Test with limit: `onenote-copilot index --initial --limit 10`
     """
     try:
+        # Lazy import of indexing commands to avoid heavy dependencies during startup
+        from .commands.index_content import (cmd_index_all_content,
+                                             cmd_index_recent_content,
+                                             cmd_show_status)
+
         if status:
             # Show indexing status
             asyncio.run(cmd_show_status())

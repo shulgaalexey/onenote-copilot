@@ -104,15 +104,14 @@ class TestCheckDependencies:
     @patch('src.main.console.print')
     def test_check_dependencies_missing_single(self, mock_print):
         """Test behavior when a single dependency is missing."""
-        # Store original import for safe fallback
-        original_import = builtins.__import__
+        with patch('importlib.util.find_spec') as mock_find_spec:
+            # Mock openai as missing, others as available
+            def mock_spec_side_effect(name):
+                if name == 'openai':
+                    return None  # Module not found
+                return MagicMock()  # Module found
 
-        def mock_import(name, *args, **kwargs):
-            if name == 'openai':
-                raise ImportError(f"No module named '{name}'")
-            return original_import(name, *args, **kwargs)
-
-        with patch('builtins.__import__', side_effect=mock_import):
+            mock_find_spec.side_effect = mock_spec_side_effect
             result = check_dependencies()
 
             # Should return False when dependencies are missing
@@ -124,16 +123,16 @@ class TestCheckDependencies:
     @patch('src.main.console.print')
     def test_check_dependencies_missing_multiple(self, mock_print):
         """Test behavior when multiple dependencies are missing."""
-        missing_deps = ['openai', 'msal']
-        # Store original import for safe fallback
-        original_import = builtins.__import__
+        with patch('importlib.util.find_spec') as mock_find_spec:
+            # Mock multiple dependencies as missing
+            missing_deps = ['openai', 'msal']
 
-        def mock_import(name, *args, **kwargs):
-            if name in missing_deps:
-                raise ImportError(f"No module named '{name}'")
-            return original_import(name, *args, **kwargs)
+            def mock_spec_side_effect(name):
+                if name in missing_deps:
+                    return None  # Module not found
+                return MagicMock()  # Module found
 
-        with patch('builtins.__import__', side_effect=mock_import):
+            mock_find_spec.side_effect = mock_spec_side_effect
             result = check_dependencies()
 
             assert result is False
@@ -213,29 +212,30 @@ class TestRunMainApp:
     """Test main application runner functionality."""
 
     @patch('src.main.get_logger')
-    @patch('src.main.OneNoteCLI')
     @patch('src.main.console.print')
-    async def test_run_main_app_success(self, mock_print, mock_cli_class, mock_get_logger):
+    async def test_run_main_app_success(self, mock_print, mock_get_logger):
         """Test successful main app execution."""
         # Setup logger mock
         mock_logger = MagicMock()
         mock_get_logger.return_value = mock_logger
 
-        # Setup mocks
-        mock_cli = AsyncMock()
-        mock_cli.start_chat.return_value = None
-        mock_cli.get_conversation_summary.return_value = {"total_messages": 0}
-        mock_cli_class.return_value = mock_cli
+        # Mock the lazy import inside run_main_app
+        with patch.dict('sys.modules', {'src.cli.interface': MagicMock()}):
+            with patch('src.cli.interface.OneNoteCLI') as mock_cli_class:
+                # Setup mocks
+                mock_cli = AsyncMock()
+                mock_cli.start_chat.return_value = None
+                mock_cli.get_conversation_summary.return_value = {"total_messages": 0}
+                mock_cli_class.return_value = mock_cli
 
-        # Test main app
-        await run_main_app(debug=False)
+                # Test main app
+                await run_main_app(debug=False)
 
-        mock_cli.start_chat.assert_called_once()
+                mock_cli.start_chat.assert_called_once()
 
     @patch('src.main.get_logger')
-    @patch('src.main.OneNoteCLI')
     @patch('src.main.console.print')
-    async def test_run_main_app_debug_mode(self, mock_print, mock_cli_class, mock_get_logger):
+    async def test_run_main_app_debug_mode(self, mock_print, mock_get_logger):
         """Test main app execution with debug mode."""
         # Setup logger mock
         mock_logger = MagicMock()
@@ -255,7 +255,7 @@ class TestRunMainApp:
         mock_cli.get_conversation_summary.assert_called_once()
 
     @patch('src.main.get_logger')
-    @patch('src.main.OneNoteCLI')
+    @patch('src.cli.interface.OneNoteCLI')
     @patch('src.main.console.print_exception')
     async def test_run_main_app_exception_debug(self, mock_print_exception, mock_cli_class, mock_get_logger):
         """Test main app exception handling in debug mode."""
@@ -276,7 +276,7 @@ class TestRunMainApp:
         mock_print_exception.assert_called_once()
 
     @patch('src.main.get_logger')
-    @patch('src.main.OneNoteCLI')
+    @patch('src.cli.interface.OneNoteCLI')
     @patch('src.main.console.print_exception')
     async def test_run_main_app_exception_no_debug(self, mock_print_exception, mock_cli_class, mock_get_logger):
         """Test main app exception handling without debug mode."""

@@ -18,6 +18,18 @@ This file tracks all files that have been deleted from the repository to maintai
 - **Deleted by**: GitHub Copilot Agent
 - **Date**: 2025-07-18
 
+**File Path**: `test_import_timing.py`
+- **Reason**: Temporary diagnostic file for investigating startup performance bottlenecks
+- **Context**: Used to measure import times during performance troubleshooting, no longer needed
+- **Deleted by**: GitHub Copilot Agent
+- **Date**: 2025-07-18
+
+**File Path**: `test_minimal_imports.py`
+- **Reason**: Temporary diagnostic file for isolating slow import modules
+- **Context**: Created during startup performance investigation, diagnostic work completed
+- **Deleted by**: GitHub Copilot Agent
+- **Date**: 2025-07-18
+
 **File Path**: `Next_Enhancement_Roadmap.md`
 - **Reason**: Documentation consolidation - merged into unified Semantic_Search_Enhancement.md
 - **Context**: Post-completion roadmap consolidated into master PRP

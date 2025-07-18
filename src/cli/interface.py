@@ -126,10 +126,10 @@ class OneNoteCLI:
 
     async def _initialize_agent(self) -> None:
         """Initialize the OneNote agent with progress indicator."""
-        with self.console.status("[bold blue]Initializing OneNote Copilot...", spinner="dots"):
+        with self.console.status("[bold blue]🔧 Initializing OneNote Copilot...", spinner="dots"):
             try:
                 await self.agent.initialize()
-                self.console.print("[green]✅ OneNote Copilot initialized successfully![/green]")
+                self.console.print("[green]✅ OneNote Copilot ready![/green]")
             except AuthenticationError:
                 self.console.print("[yellow]🔐 Authentication required - browser will open for login.[/yellow]")
                 await self.agent.initialize()

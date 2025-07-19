@@ -12,6 +12,7 @@ import unittest.mock
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from tenacity import RetryError
 
 from src.config.settings import get_settings
 from src.search.embeddings import EmbeddingError, EmbeddingGenerator
@@ -60,11 +61,15 @@ class TestEmbeddingGeneratorFixes:
 
             generator = EmbeddingGenerator(settings)
 
-            # Should raise EmbeddingError when client is None
-            with pytest.raises(EmbeddingError) as exc_info:
+            # Should raise RetryError when client is None (due to retry decorator)
+            with pytest.raises(RetryError) as exc_info:
                 await generator.generate_embedding("test content")
 
-            assert "OpenAI client is not initialized" in str(exc_info.value)
+            # Check that the original exception was EmbeddingError
+            # RetryError wraps the original exception in its last_attempt
+            original_exception = exc_info.value.last_attempt.exception()
+            assert isinstance(original_exception, EmbeddingError)
+            assert "OpenAI client is not initialized" in str(original_exception)
 
     @pytest.mark.asyncio
     @pytest.mark.fast
@@ -77,11 +82,15 @@ class TestEmbeddingGeneratorFixes:
 
             generator = EmbeddingGenerator(settings)
 
-            # Should raise EmbeddingError when client is None
-            with pytest.raises(EmbeddingError) as exc_info:
+            # Should raise RetryError when client is None (due to retry decorator)
+            with pytest.raises(RetryError) as exc_info:
                 await generator.generate_embedding("test content")
 
-            assert "OpenAI client is not initialized" in str(exc_info.value)
+            # Check that the original exception was EmbeddingError
+            # RetryError wraps the original exception in its last_attempt
+            original_exception = exc_info.value.last_attempt.exception()
+            assert isinstance(original_exception, EmbeddingError)
+            assert "OpenAI client is not initialized" in str(original_exception)
 
     @pytest.mark.asyncio
     async def test_generate_embedding_api_call_format(self):
@@ -316,6 +325,8 @@ class TestEndToEndFix:
             settings.openai_api_key.get_secret_value.return_value = ""
             settings.semantic_search_threshold = 0.75
             settings.semantic_search_limit = 10
+            settings.chunk_size = 4000
+            settings.chunk_overlap = 200
             mock_settings.return_value = settings
 
             mock_search_tool = MagicMock()
@@ -344,6 +355,8 @@ class TestSemanticSearchIndexPagesUpdates:
         settings.openai_api_key.get_secret_value.return_value = "test-key"
         settings.semantic_search_limit = 10
         settings.semantic_search_threshold = 0.7
+        settings.chunk_size = 4000
+        settings.chunk_overlap = 200
 
         # Mock search tool
         mock_search_tool = MagicMock()
@@ -403,6 +416,8 @@ class TestSemanticSearchIndexPagesUpdates:
         # Mock settings
         settings = MagicMock()
         settings.openai_api_key.get_secret_value.return_value = "test-key"
+        settings.chunk_size = 4000
+        settings.chunk_overlap = 200
 
         # Mock search tool
         mock_search_tool = MagicMock()
@@ -427,6 +442,8 @@ class TestSemanticSearchIndexPagesUpdates:
         # Mock settings
         settings = MagicMock()
         settings.openai_api_key.get_secret_value.return_value = "test-key"
+        settings.chunk_size = 4000
+        settings.chunk_overlap = 200
 
         # Mock search tool
         mock_search_tool = MagicMock()

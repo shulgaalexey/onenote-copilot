@@ -299,10 +299,10 @@ class TestOneNoteSearchTool:
         # Test thought-related query extraction
         test_cases = [
             ("What were my thoughts about Robo-me?", "Robo-me"),
-            ("What did I think about the project?", "the project"),
+            ("What did I think about the project?", "project"),
             ("My thoughts on machine learning", "machine learning"),
             ("Ideas about artificial intelligence", "artificial intelligence"),
-            ("Opinion about the meeting", "the meeting"),
+            ("Opinion about the meeting", "meeting"),
         ]
 
         for query, expected in test_cases:

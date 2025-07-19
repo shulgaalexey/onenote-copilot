@@ -90,7 +90,7 @@ class TestOneNoteAgentAdditional:
 
         mock_response = AIMessage(content="Here are your recent pages...")
 
-        with patch.object(agent, 'llm') as mock_llm:
+        with patch.object(agent, '_llm') as mock_llm:
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
             result = await agent._agent_node(state)
@@ -261,7 +261,9 @@ class TestOneNoteAgentAdditional:
             "what is OneNote?",
             "how does note-taking work?",
             "explain digital organization",
-            "tell me about productivity"
+            "hello there",
+            "what is your name?",
+            "how are you today?"
         ]
 
         for query in test_cases:

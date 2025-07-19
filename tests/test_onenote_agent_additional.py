@@ -120,7 +120,7 @@ class TestOneNoteAgentAdditional:
 
         mock_response = AIMessage(content="Here are your OneNote notebooks...")
 
-        with patch.object(agent, 'llm') as mock_llm:
+        with patch.object(agent, '_llm') as mock_llm:
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
             result = await agent._agent_node(state)
@@ -188,7 +188,7 @@ class TestOneNoteAgentAdditional:
         mock_response = AIMessage(content="OneNote is a digital note-taking application...")
 
         with patch.object(agent, '_needs_tool_call', return_value=False), \
-             patch.object(agent, 'llm') as mock_llm:
+             patch.object(agent, '_llm') as mock_llm:
 
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
@@ -215,7 +215,7 @@ class TestOneNoteAgentAdditional:
 
         mock_response = AIMessage(content="How can I help you today?")
 
-        with patch.object(agent, 'llm') as mock_llm:
+        with patch.object(agent, '_llm') as mock_llm:
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
             result = await agent._agent_node(state)

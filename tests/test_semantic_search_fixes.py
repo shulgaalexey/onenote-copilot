@@ -12,6 +12,7 @@ import unittest.mock
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from tenacity import RetryError
 
 from src.config.settings import get_settings
 from src.search.embeddings import EmbeddingError, EmbeddingGenerator
@@ -19,9 +20,12 @@ from src.search.relevance_ranker import RelevanceRanker
 from src.search.semantic_search import SemanticSearchEngine
 
 
+@pytest.mark.embedding
+@pytest.mark.unit
 class TestEmbeddingGeneratorFixes:
     """Test fixes for EmbeddingGenerator initialization and API calls."""
 
+    @pytest.mark.fast
     def test_embedding_generator_with_no_api_key(self):
         """Test that EmbeddingGenerator handles missing API key gracefully."""
         with patch('src.config.settings.get_settings') as mock_settings:
@@ -47,8 +51,9 @@ class TestEmbeddingGeneratorFixes:
             assert generator.client is None
 
     @pytest.mark.asyncio
-    async def test_generate_embedding_with_no_client(self):
-        """Test that generate_embedding fails gracefully when client is None."""
+    @pytest.mark.slow
+    async def test_generate_embedding_with_no_client_original(self):
+        """Test that generate_embedding fails gracefully when client is None - original slow version."""
         with patch('src.config.settings.get_settings') as mock_settings:
             settings = MagicMock()
             settings.openai_api_key.get_secret_value.return_value = ""
@@ -56,11 +61,36 @@ class TestEmbeddingGeneratorFixes:
 
             generator = EmbeddingGenerator(settings)
 
-            # Should raise EmbeddingError when client is None
-            with pytest.raises(EmbeddingError) as exc_info:
+            # Should raise RetryError when client is None (due to retry decorator)
+            with pytest.raises(RetryError) as exc_info:
                 await generator.generate_embedding("test content")
 
-            assert "OpenAI client is not initialized" in str(exc_info.value)
+            # Check that the original exception was EmbeddingError
+            # RetryError wraps the original exception in its last_attempt
+            original_exception = exc_info.value.last_attempt.exception()
+            assert isinstance(original_exception, EmbeddingError)
+            assert "OpenAI client is not initialized" in str(original_exception)
+
+    @pytest.mark.asyncio
+    @pytest.mark.fast
+    async def test_generate_embedding_with_no_client(self, mock_network_delays):
+        """Test that generate_embedding fails gracefully when client is None - fast version."""
+        with patch('src.config.settings.get_settings') as mock_settings:
+            settings = MagicMock()
+            settings.openai_api_key.get_secret_value.return_value = ""
+            mock_settings.return_value = settings
+
+            generator = EmbeddingGenerator(settings)
+
+            # Should raise RetryError when client is None (due to retry decorator)
+            with pytest.raises(RetryError) as exc_info:
+                await generator.generate_embedding("test content")
+
+            # Check that the original exception was EmbeddingError
+            # RetryError wraps the original exception in its last_attempt
+            original_exception = exc_info.value.last_attempt.exception()
+            assert isinstance(original_exception, EmbeddingError)
+            assert "OpenAI client is not initialized" in str(original_exception)
 
     @pytest.mark.asyncio
     async def test_generate_embedding_api_call_format(self):
@@ -94,7 +124,7 @@ class TestEmbeddingGeneratorFixes:
     async def test_batch_generate_embeddings_performance_logging(self):
         """Test that batch_generate_embeddings logs performance correctly."""
         with patch('src.config.settings.get_settings') as mock_settings, \
-             patch('src.config.logging.log_performance') as mock_log_perf:
+             patch('src.search.embeddings.log_performance') as mock_log_perf:
 
             settings = MagicMock()
             settings.openai_api_key.get_secret_value.return_value = "sk-test-key"
@@ -137,11 +167,13 @@ class TestSemanticSearchEngineFixes:
     async def test_semantic_search_performance_logging(self):
         """Test that semantic_search logs performance with correct signature."""
         with patch('src.config.settings.get_settings') as mock_settings, \
-             patch('src.config.logging.log_performance') as mock_log_perf:
+             patch('src.search.semantic_search.log_performance') as mock_log_perf:
 
             settings = MagicMock()
             settings.semantic_search_threshold = 0.75
             settings.semantic_search_limit = 10
+            settings.chunk_size = 1000
+            settings.chunk_overlap = 100
             mock_settings.return_value = settings
 
             # Mock dependencies
@@ -181,7 +213,7 @@ class TestRelevanceRankerFixes:
     async def test_combine_hybrid_results_performance_logging(self):
         """Test that combine_hybrid_results logs performance with correct signature."""
         with patch('src.config.settings.get_settings') as mock_settings, \
-             patch('src.config.logging.log_performance') as mock_log_perf:
+             patch('src.search.relevance_ranker.log_performance') as mock_log_perf:
 
             settings = MagicMock()
             mock_settings.return_value = settings
@@ -199,10 +231,11 @@ class TestRelevanceRankerFixes:
             assert call_args[0][0] == "combine_hybrid_results"  # Function name
             assert isinstance(call_args[0][1], float)  # Duration
 
-    def test_rank_semantic_results_performance_logging(self):
+    @pytest.mark.asyncio
+    async def test_rank_semantic_results_performance_logging(self):
         """Test that rank_semantic_results logs performance with correct signature."""
         with patch('src.config.settings.get_settings') as mock_settings, \
-             patch('src.config.logging.log_performance') as mock_log_perf:
+             patch('src.search.relevance_ranker.log_performance') as mock_log_perf:
 
             settings = MagicMock()
             mock_settings.return_value = settings
@@ -212,16 +245,46 @@ class TestRelevanceRankerFixes:
             # Mock query intent
             from src.search.query_processor import QueryIntent
             query_intent = QueryIntent(
-                intent_type="search",
-                keywords=["test"],
+                original_query="test",
                 processed_query="test",
-                metadata={}
+                intent_type="search",
+                confidence=0.9,
+                keywords=["test"]
             )
 
             # Should complete and log performance with correct signature
-            result = ranker.rank_semantic_results([], query_intent)
+            # Create a mock result so the method doesn't exit early
+            from datetime import datetime
 
-            assert result == []
+            from src.models.onenote import (ContentChunk, OneNotePage,
+                                            SemanticSearchResult)
+            mock_page = OneNotePage(
+                id="test-page",
+                title="Test Page",
+                content="Test content",
+                createdDateTime=datetime.now(),
+                lastModifiedDateTime=datetime.now()
+            )
+            mock_chunk = ContentChunk(
+                id="test-chunk",
+                content="Test content",
+                page_id="test-page",
+                page_title="Test Page",
+                chunk_index=0,
+                start_position=0,
+                end_position=12,
+                metadata={}
+            )
+            mock_result = SemanticSearchResult(
+                chunk=mock_chunk,
+                similarity_score=0.8,
+                search_type="semantic",
+                rank=1,
+                page=mock_page
+            )
+            result = await ranker.rank_semantic_results([mock_result], query_intent)
+
+            assert len(result) == 1
             # Verify log_performance was called with correct signature
             mock_log_perf.assert_called()
             call_args = mock_log_perf.call_args
@@ -248,7 +311,7 @@ class TestLogPerformanceFunction:
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             assert "test_function" in call_args
-            assert "1.234s" in call_args
+            assert "1.23s" in call_args  # Should be rounded to 2 decimal places
 
 
 class TestEndToEndFix:
@@ -262,6 +325,8 @@ class TestEndToEndFix:
             settings.openai_api_key.get_secret_value.return_value = ""
             settings.semantic_search_threshold = 0.75
             settings.semantic_search_limit = 10
+            settings.chunk_size = 4000
+            settings.chunk_overlap = 200
             mock_settings.return_value = settings
 
             mock_search_tool = MagicMock()
@@ -290,6 +355,8 @@ class TestSemanticSearchIndexPagesUpdates:
         settings.openai_api_key.get_secret_value.return_value = "test-key"
         settings.semantic_search_limit = 10
         settings.semantic_search_threshold = 0.7
+        settings.chunk_size = 4000
+        settings.chunk_overlap = 200
 
         # Mock search tool
         mock_search_tool = MagicMock()
@@ -349,6 +416,8 @@ class TestSemanticSearchIndexPagesUpdates:
         # Mock settings
         settings = MagicMock()
         settings.openai_api_key.get_secret_value.return_value = "test-key"
+        settings.chunk_size = 4000
+        settings.chunk_overlap = 200
 
         # Mock search tool
         mock_search_tool = MagicMock()
@@ -373,6 +442,8 @@ class TestSemanticSearchIndexPagesUpdates:
         # Mock settings
         settings = MagicMock()
         settings.openai_api_key.get_secret_value.return_value = "test-key"
+        settings.chunk_size = 4000
+        settings.chunk_overlap = 200
 
         # Mock search tool
         mock_search_tool = MagicMock()

@@ -13,10 +13,13 @@ class TestAgentSimpleCoverage:
 
     def test_agent_initialization_basic(self):
         """Test basic agent initialization."""
-        with patch('src.agents.onenote_agent.ChatOpenAI') as mock_llm:
+        with patch('src.agents.onenote_agent.get_settings'), \
+             patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
+             patch('src.agents.onenote_agent.OneNoteSearchTool'), \
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
             agent = OneNoteAgent()
             assert agent is not None
-            assert hasattr(agent, 'llm')
+            # Note: llm is lazy-loaded, so we can't test it directly without triggering the load
 
     def test_agent_initialization_with_settings(self):
         """Test agent initialization with custom settings."""
@@ -26,13 +29,19 @@ class TestAgentSimpleCoverage:
         mock_settings.azure_openai_deployment_name = "test_deployment"
         mock_settings.azure_openai_api_version = "test_version"
 
-        with patch('src.agents.onenote_agent.ChatOpenAI') as mock_llm:
+        with patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
+             patch('src.agents.onenote_agent.OneNoteSearchTool'), \
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
             agent = OneNoteAgent(settings=mock_settings)
             assert agent is not None
+            assert agent.settings == mock_settings
 
     def test_needs_tool_call_basic(self):
         """Test needs_tool_call method with basic scenarios."""
-        with patch('src.agents.onenote_agent.ChatOpenAI'):
+        with patch('src.agents.onenote_agent.get_settings'), \
+             patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
+             patch('src.agents.onenote_agent.OneNoteSearchTool'), \
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
             agent = OneNoteAgent()
 
             # Test with query that needs search
@@ -45,7 +54,10 @@ class TestAgentSimpleCoverage:
 
     def test_extract_tool_info_basic(self):
         """Test extract_tool_info method."""
-        with patch('src.agents.onenote_agent.ChatOpenAI'):
+        with patch('src.agents.onenote_agent.get_settings'), \
+             patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
+             patch('src.agents.onenote_agent.OneNoteSearchTool'), \
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
             agent = OneNoteAgent()
 
             # Test search query extraction
@@ -66,7 +78,10 @@ class TestAgentSimpleCoverage:
 
     def test_extract_tool_info_notebooks_keywords(self):
         """Test extract_tool_info with various notebook keywords."""
-        with patch('src.agents.onenote_agent.ChatOpenAI'):
+        with patch('src.agents.onenote_agent.get_settings'), \
+             patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
+             patch('src.agents.onenote_agent.OneNoteSearchTool'), \
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
             agent = OneNoteAgent()
 
             # Test different notebook keywords
@@ -83,7 +98,10 @@ class TestAgentSimpleCoverage:
 
     def test_extract_tool_info_recent_pages_keywords(self):
         """Test extract_tool_info with various recent pages keywords."""
-        with patch('src.agents.onenote_agent.ChatOpenAI'):
+        with patch('src.agents.onenote_agent.get_settings'), \
+             patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
+             patch('src.agents.onenote_agent.OneNoteSearchTool'), \
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
             agent = OneNoteAgent()
 
             # Test different recent pages keywords

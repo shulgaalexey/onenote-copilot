@@ -44,9 +44,17 @@ pip freeze > requirements.txt               # Update requirements after adding p
 
 # Quality Checks
 ruff check --fix; mypy .                    # Lint and type check
-# Development
+
+# Development - Standard Testing
 python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Run tests with TEST_RUN.md tracking
 python -m pytest tests/ --cov=src --cov-report=term-missing --cov-report=html > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Tests with coverage and HTML report
+
+# Development - Optimized Testing (26% faster startup)
+python -m pytest tests/ --noconftest --no-cov -q -x > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Lightning-fast testing for TDD
+python -m pytest tests/ --cov=src --cov-report=term-missing -q > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Fast coverage reporting
+
+# Performance Testing
+python -m pytest tests/ --collect-only -q > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"  # Benchmark startup performance
 
 # Application
 python -m src.main                          # Run main application (future)
@@ -85,6 +93,40 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 - **Use this approach for ALL test runs** to ensure proper completion tracking.
 - **NO EXCEPTIONS**: Even simple Python scripts, import tests, or debugging code MUST use this approach if they could take more than a few seconds
 
+### 🚀 Optimized Test Commands for Different Scenarios:
+
+#### Ultra-Fast Testing (Lightning Mode - 4.3s startup):
+```powershell
+# For rapid TDD cycles - bypasses heavy conftest imports
+python -m pytest tests/ --noconftest --no-cov -q -x > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+#### Fast Coverage Testing:
+```powershell
+# Optimized coverage reporting - faster than full coverage
+python -m pytest tests/ --cov=src --cov-report=term-missing -q > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+#### Full Test Suite with Coverage:
+```powershell
+# Complete test suite with HTML coverage report
+python -m pytest tests/ --cov=src --cov-report=term-missing --cov-report=html > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+#### Performance Benchmarking:
+```powershell
+# Monitor pytest startup performance
+python -m pytest tests/ --collect-only -q > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
+```
+
+### 🕐 Long-Running Test Management:
+- **Long-running tests** (>30 seconds) should use the standard TEST_RUN.md approach
+- **Network timeout tests** can take 8+ seconds each - use optimized versions for development
+- **Embedding generation tests** can take 8+ seconds - use pre-computed fixtures for speed
+- **Agent initialization tests** can take 3+ seconds - use proper mocking for faster execution
+- **For development**: Use `--noconftest` flag to skip heavy imports and reduce startup time by 26%
+- **For CI/CD**: Use full test suite with coverage for comprehensive validation
+
 Example PowerShell command for test tracking:
 ```powershell
 python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&1; Add-Content -Path "TEST_RUN.md" -Value "%TESTS FINISHED%"
@@ -108,6 +150,23 @@ Use the `TEST_RUN.md` file content to fix failing tests if any.
 - Proceeding to next steps without seeing `%TESTS FINISHED%` marker
 
 Also when running the app in the terminal. **IT TAKES TIME TO START THE APP!!!**
+
+**📚 PYTEST STARTUP OPTIMIZATION & TESTING BEST PRACTICES**:
+- **ALL developers (humans and AI assistants) MUST follow the testing best practices documented in `./docs/PYTEST_STARTUP_OPTIMIZATION.md`**
+- **MANDATORY reading**: `./docs/PYTEST_STARTUP_OPTIMIZATION.md` - contains complete pytest startup optimization guide and testing workflows
+- **Key optimization strategies**: 26% faster pytest startup through `--noconftest` and `--no-cov` flags
+- **Available optimized commands**:
+  - `Test-Lightning` - Ultra-fast testing (4.3s startup)
+  - `Test-Coverage-Fast` - Optimized coverage reporting
+  - `Test-StartupBenchmark` - Performance monitoring
+- **Development workflow**: Use `Test-Lightning` for rapid TDD cycles, `Test-Coverage-Fast` for comprehensive validation
+
+**🔥 TESTING COMPLIANCE REQUIREMENTS**:
+- **BEFORE ANY CODE CHANGES**: Review relevant sections in `./docs/PYTEST_STARTUP_OPTIMIZATION.md`
+- **AFTER ANY CODE CHANGES**: Run tests using the optimized test patterns documented in the optimization guide
+- **FOR PERFORMANCE ISSUES**: Use `Test-StartupBenchmark` to monitor pytest startup performance
+- **FOR NEW FEATURES**: Follow TDD patterns with optimized test commands for faster feedback
+- **NO EXCEPTIONS**: These practices apply to ALL code development in this repository
 
 
 ### ✅ Task Completion

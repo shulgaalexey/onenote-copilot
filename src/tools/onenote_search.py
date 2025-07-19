@@ -121,6 +121,7 @@ class OneNoteSearchTool:
         question_patterns = [
             r'^show\s+me\s+',
             r'^find\s+me\s+',
+            r'^find\s+',
             r'^search\s+for\s+',
             r'^look\s+for\s+'
         ]
@@ -132,6 +133,9 @@ class OneNoteSearchTool:
         # Be more selective about word removal to preserve semantic meaning
         if query.startswith('about '):
             query = query[6:]  # Remove 'about ' from start only
+
+        # Remove 'about' from middle of queries for better matching
+        query = re.sub(r'\s+about\s+', ' ', query, flags=re.IGNORECASE)
 
         # Clean up extra whitespace
         query = re.sub(r'\s+', ' ', query).strip()

@@ -13,8 +13,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from langchain_core.messages import (AIMessage, BaseMessage, HumanMessage,
                                      SystemMessage)
-from langchain_openai import ChatOpenAI
-from langgraph.graph import StateGraph
+# Lazy import: from langchain_openai import ChatOpenAI
+# Lazy import: from langgraph.graph import StateGraph
 from typing_extensions import TypedDict
 
 from ..auth.microsoft_auth import AuthenticationError, MicrosoftAuthenticator
@@ -63,19 +63,36 @@ class OneNoteAgent:
         self._semantic_search_engine = None
         self._semantic_search_enabled = self.settings.enable_hybrid_search
 
-        # Initialize LLM
-        self.llm = ChatOpenAI(
-            api_key=self.settings.openai_api_key,
-            model=self.settings.openai_model,
-            temperature=self.settings.openai_temperature,
-            streaming=True
-        )
+        # Initialize LLM (will be lazy loaded)
+        self._llm = None
 
-        # Create LangGraph workflow
-        self.graph = self._create_agent_graph()
+        # Create LangGraph workflow (will be lazy loaded)
+        self._graph = None
 
         # Agent state
         self.current_state: Optional[AgentState] = None
+
+    @property
+    def llm(self):
+        """Lazy initialization of ChatOpenAI LLM."""
+        if self._llm is None:
+            from langchain_openai import ChatOpenAI
+            self._llm = ChatOpenAI(
+                api_key=self.settings.openai_api_key,
+                model=self.settings.openai_model,
+                temperature=self.settings.openai_temperature,
+                streaming=True
+            )
+            logger.info("LLM initialized")
+        return self._llm
+
+    @property
+    def graph(self):
+        """Lazy initialization of LangGraph workflow."""
+        if self._graph is None:
+            self._graph = self._create_agent_graph()
+            logger.info("Agent graph initialized")
+        return self._graph
 
     @property
     def semantic_search_engine(self):
@@ -95,6 +112,8 @@ class OneNoteAgent:
 
     def _create_agent_graph(self) -> Any:
         """Create the LangGraph workflow for the agent."""
+        from langgraph.graph import StateGraph
+
         workflow = StateGraph(MessagesState)
 
         # Add nodes
@@ -538,7 +557,7 @@ class OneNoteAgent:
             "notes about", "pages about", "content about", "thoughts about",
             "what were my thoughts", "my thoughts on", "what did i think",
             "what was my", "thoughts on", "ideas about", "how did i",
-            "what did i", "tell me about", "explain", "describe",
+            "what did i", "tell me about", "describe",
             "what about", "information about", "details about", "data about",
             "anything about", "stuff about", "material about", "content on",
             "organise", "organize", "prepare", "preparation", "plan", "planning",
@@ -631,8 +650,12 @@ class OneNoteAgent:
             # Initialize state
             initial_state = {"messages": [HumanMessage(content=query)]}
 
+            # Yield status update for AI component loading (only on first access)
+            if self._graph is None:
+                yield StreamingChunk.status_chunk("🤖 Loading AI components...")
+
             # Yield status update
-            yield StreamingChunk.status_chunk("Processing your query...")
+            yield StreamingChunk.status_chunk("🔍 Processing your query...")
 
             # Track execution state
             tool_executed = False

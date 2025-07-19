@@ -23,6 +23,7 @@ This file tracks all project tasks using a priority-based system optimized for s
 - [x] Create comprehensive PRP for OneNote Copilot CLI implementation
 - [x] Add comprehensive logging system to project with file output and clean startup
 - [x] Add /content command to display OneNote page content by title
+- [x] ✅ **COMPLETED**: Add authenticated user information to --info command output - 2025-07-18
 - [ ] **CURRENT: Implement Semantic Search Enhancement per PRP** - 2025-07-17
 - [ ] Improve test coverage to achieve at least 80% code coverage
 

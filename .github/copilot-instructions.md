@@ -93,6 +93,16 @@ When you need to do a refactoring, use the `prompts/commands/refactor.md` templa
 - **Use this approach for ALL test runs** to ensure proper completion tracking.
 - **NO EXCEPTIONS**: Even simple Python scripts, import tests, or debugging code MUST use this approach if they could take more than a few seconds
 
+<!--  ── Test execution rules ───────────────────────────────────────── -->
+
+### 🏃‍♂️ VS Code Task-Based Test Execution
+**When I ask to "run tests", follow these rules:**
+- **ALWAYS** invoke the VS Code task **"pytest (all)"** instead of typing `pytest` in the terminal when you need to run all or large number of tests
+- **Wait until that task TERMINATES** (VS Code Tasks API "terminated" event) before you continue with any other action
+- **If the task fails**, surface the full task output in chat so I can diagnose it
+- **Never start a second long-running task or terminal command** until the current task has finished
+- This ensures proper task lifecycle management and prevents resource conflicts
+
 ### 🚀 Optimized Test Commands for Different Scenarios:
 
 #### Ultra-Fast Testing (Lightning Mode - 4.3s startup):

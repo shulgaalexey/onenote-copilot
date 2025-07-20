@@ -153,11 +153,19 @@ python_functions = test_*
 - `Test-StartupBenchmark` - Performance monitoring
 - `Test-Fast-NoConftest` - Fastest execution
 
-### 🎯 Recommendations
+### �‍♂️ VS Code Task Integration
+For optimal development workflow in VS Code:
+- **Use VS Code Task**: Prefer the **"pytest (all)"** task over manual terminal commands
+- **Wait for Completion**: Ensure tasks fully terminate before starting new operations
+- **Task Output**: Review full task output when debugging test failures
+- **Resource Efficiency**: Avoid concurrent long-running tasks to prevent conflicts
+
+### �🎯 Recommendations
 1. Use `Test-Lightning` for rapid TDD cycles
 2. Use `Test-Coverage-Fast` for coverage reports
 3. Monitor performance with `Test-StartupBenchmark`
 4. Consider splitting large conftest.py files for better modularity
+5. **Use VS Code tasks** for consistent test execution and proper lifecycle management
 
 ## Future Optimizations
 

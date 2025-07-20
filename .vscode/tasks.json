@@ -1,0 +1,64 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "pytest (all)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m",
+        "pytest",
+        "tests/",
+        "-v",
+        "--cov=src",
+        "--cov-report=term-missing"
+      ],
+      "problemMatcher": [],
+      "group": "test",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-Command"]
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      }
+    },
+    {
+      "label": "pytest (fast)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "-m",
+        "pytest",
+        "tests/",
+        "--noconftest",
+        "--no-cov",
+        "-q",
+        "-x"
+      ],
+      "problemMatcher": [],
+      "group": "test",
+      "options": {
+        "shell": {
+          "executable": "pwsh.exe",
+          "args": ["-Command"]
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": true,
+        "clear": false
+      }
+    }
+  ]
+}

@@ -278,6 +278,13 @@ python run_tests.py check
 - **Maximum wait time**: 5 minutes before investigating issues
 - **Use same pattern** for all test types (unit, integration, coverage)
 
+### 🏃‍♂️ VS Code Task Integration
+When working in VS Code with Copilot:
+- **Prefer VS Code Task**: Use the **"pytest (all)"** task instead of manual terminal commands
+- **Task Completion**: Wait for the task to fully terminate before proceeding
+- **Error Handling**: Surface full task output for debugging when tasks fail
+- **Resource Management**: Avoid running multiple long-running tasks simultaneously
+
 ## 🔒 Security & Privacy
 
 - **OAuth2 Authentication**: Uses Microsoft's secure OAuth2 flow

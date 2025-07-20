@@ -1,0 +1,34 @@
+{
+  // ---- Terminal integration ----
+  "terminal.integrated.defaultProfile.windows": "PowerShell (pwsh)",
+  "terminal.integrated.profiles.windows": {
+    "PowerShell (pwsh)": {
+      "source": "PowerShell",
+      "path": "C:\\Program Files\\PowerShell\\7\\pwsh.exe"
+    }
+  },
+  "terminal.integrated.shellIntegration.enabled": true,
+  "terminal.integrated.shellIntegration.decorationsEnabled": "never",
+
+  // ---- GitHub Copilot Agent ----
+  "github.copilot.chat.agent.terminal.allowList": {
+    "pytest": true
+  },
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+
+  // The setting was renamed in VS Code 1.99. The new key is chat.tools.autoApprove – everything else stayed the same.
+  "github.copilot.chat.agent.autoApproveTools": true,
+  "chat.tools.autoApprove": true,
+
+  // ---- Python testing noise reduction ----
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": [
+    "."
+  ],
+  "python.testing.unittestEnabled": false,
+  // The Python extension dropped built-in Nose support in 2021, so the flag disappeared from the schema. It now shows as “unknown configuration” and has no effect.
+  "python.testing.nosetestsEnabled": false,
+
+  // it’s on by default but explicit is safer
+  "github.copilot.chat.agent.runTasks": true
+}

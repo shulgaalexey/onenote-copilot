@@ -736,7 +736,10 @@ class OneNoteSearchTool:
 
     async def get_all_pages(self, limit: Optional[int] = None) -> List[OneNotePage]:
         """
-        Get all OneNote pages from all notebooks.
+        Get all OneNote pages from all notebooks using section-by-section approach.
+        
+        This method handles cases where accounts have many sections by fetching
+        sections first, then getting pages for each section individually.
 
         Args:
             limit: Optional maximum number of pages to return
@@ -750,62 +753,50 @@ class OneNoteSearchTool:
         try:
             token = await self.authenticator.get_valid_token()
 
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json"
-            }
+            # First, get all sections from all notebooks
+            logger.info("Getting all sections from notebooks...")
+            sections = await self._get_all_sections(token)
+            logger.info(f"Found {len(sections)} sections across all notebooks")
 
-            # Build params for API call
-            params = {
-                "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
-                "$expand": "parentSection,parentNotebook",
-                "$orderby": "lastModifiedDateTime desc"
-            }
-
-            # Add limit if specified
-            if limit:
-                params["$top"] = min(limit, 200)  # API limit is typically 200
-
-            endpoint = f"{self.base_url}/me/onenote/pages"
+            if not sections:
+                logger.warning("No sections found in any notebooks")
+                return []
 
             all_pages = []
-            next_url = None
+            pages_fetched = 0
 
-            # Handle pagination if no limit specified
-            while True:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    if next_url:
-                        response = await client.get(next_url, headers=headers)
-                    else:
-                        response = await client.get(endpoint, headers=headers, params=params)
+            # Get pages from each section
+            for i, section in enumerate(sections):
+                section_id = section.get("id")
+                section_name = section.get("displayName", "Unknown")
+                
+                try:
+                    logger.debug(f"Getting pages from section: {section_name} ({i+1}/{len(sections)})")
+                    
+                    # Get pages for this specific section
+                    section_pages = await self._get_pages_from_section(section_id, token, limit)
+                    
+                    if section_pages:
+                        all_pages.extend(section_pages)
+                        pages_fetched += len(section_pages)
+                        logger.debug(f"Retrieved {len(section_pages)} pages from section '{section_name}'")
+                    
+                    # Stop if we've reached the limit
+                    if limit and pages_fetched >= limit:
+                        all_pages = all_pages[:limit]  # Trim to exact limit
+                        break
+                        
+                    # Small delay between sections to respect API limits
+                    await asyncio.sleep(0.2)
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to get pages from section '{section_name}': {e}")
+                    continue
 
-                    if response.status_code == 200:
-                        data = response.json()
-                        pages_data = data.get("value", [])
+            logger.info(f"Retrieved {len(all_pages)} pages from {len(sections)} sections")
 
-                        # Convert to OneNotePage models
-                        for page_data in pages_data:
-                            try:
-                                page = OneNotePage(**page_data)
-                                all_pages.append(page)
-
-                                # Stop if we've reached the limit
-                                if limit and len(all_pages) >= limit:
-                                    break
-                            except Exception as e:
-                                logger.warning(f"Failed to parse page data: {e}")
-                                continue
-
-                        # Check for more pages (pagination)
-                        next_url = data.get("@odata.nextLink")
-
-                        # Stop if we've reached the limit or no more pages
-                        if (limit and len(all_pages) >= limit) or not next_url:
-                            break
-                    else:
-                        raise OneNoteSearchError(f"Failed to get pages: {response.status_code}")
-
-            logger.info(f"Retrieved {len(all_pages)} pages from all notebooks")
+            # Sort by last modified date (newest first)
+            all_pages.sort(key=lambda p: p.last_modified_date_time, reverse=True)
 
             # Fetch content for pages in batches to avoid overwhelming the API
             if all_pages:
@@ -833,6 +824,135 @@ class OneNoteSearchTool:
         except Exception as e:
             logger.error(f"Failed to get all pages: {e}")
             raise OneNoteSearchError(f"Failed to get all pages: {e}")
+
+    async def _get_all_sections(self, token: str) -> List[Dict[str, Any]]:
+        """
+        Get all sections from all notebooks.
+
+        Args:
+            token: Authentication token
+
+        Returns:
+            List of section information from all notebooks
+
+        Raises:
+            OneNoteSearchError: If operation fails
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+
+            params = {
+                "$select": "id,displayName,parentNotebook",
+                "$expand": "parentNotebook"
+            }
+
+            endpoint = f"{self.base_url}/me/onenote/sections"
+            all_sections = []
+            next_url = None
+
+            # Handle pagination
+            while True:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    if next_url:
+                        response = await client.get(next_url, headers=headers)
+                    else:
+                        response = await client.get(endpoint, headers=headers, params=params)
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        sections_data = data.get("value", [])
+                        all_sections.extend(sections_data)
+
+                        # Check for more sections (pagination)
+                        next_url = data.get("@odata.nextLink")
+                        if not next_url:
+                            break
+                    else:
+                        logger.error(f"Failed to get sections: HTTP {response.status_code}")
+                        raise OneNoteSearchError(f"Failed to get sections: {response.status_code}")
+
+            return all_sections
+
+        except Exception as e:
+            logger.error(f"Failed to get all sections: {e}")
+            raise OneNoteSearchError(f"Failed to get all sections: {e}")
+
+    async def _get_pages_from_section(self, section_id: str, token: str, remaining_limit: Optional[int] = None) -> List[OneNotePage]:
+        """
+        Get all pages from a specific section.
+
+        Args:
+            section_id: Section ID to get pages from
+            token: Authentication token  
+            remaining_limit: Optional remaining limit for total pages
+
+        Returns:
+            List of OneNotePage objects from the section
+
+        Raises:
+            OneNoteSearchError: If operation fails
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json"
+            }
+
+            params = {
+                "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
+                "$expand": "parentSection,parentNotebook",
+                "$orderby": "lastModifiedDateTime desc"
+            }
+
+            # Add limit if specified
+            if remaining_limit:
+                params["$top"] = min(remaining_limit, 50)  # API limit per request
+
+            endpoint = f"{self.base_url}/me/onenote/sections/{section_id}/pages"
+            section_pages = []
+            next_url = None
+
+            # Handle pagination within the section
+            while True:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    if next_url:
+                        response = await client.get(next_url, headers=headers)
+                    else:
+                        response = await client.get(endpoint, headers=headers, params=params)
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        pages_data = data.get("value", [])
+
+                        # Convert to OneNotePage models
+                        for page_data in pages_data:
+                            try:
+                                page = OneNotePage(**page_data)
+                                section_pages.append(page)
+
+                                # Stop if we've reached the limit
+                                if remaining_limit and len(section_pages) >= remaining_limit:
+                                    break
+                            except Exception as e:
+                                logger.warning(f"Failed to parse page data: {e}")
+                                continue
+
+                        # Check for more pages in this section
+                        next_url = data.get("@odata.nextLink")
+                        if not next_url or (remaining_limit and len(section_pages) >= remaining_limit):
+                            break
+                    else:
+                        logger.warning(f"Failed to get pages from section {section_id}: HTTP {response.status_code}")
+                        break  # Continue with next section instead of failing completely
+
+            return section_pages
+
+        except Exception as e:
+            logger.warning(f"Failed to get pages from section {section_id}: {e}")
+            return []  # Return empty list to continue with other sections
 
     async def get_notebooks(self) -> List[Dict[str, Any]]:
         """

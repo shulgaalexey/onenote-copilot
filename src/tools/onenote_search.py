@@ -725,6 +725,14 @@ class OneNoteSearchTool:
                         await self._fetch_page_contents(pages, token)
 
                     return pages
+                elif response.status_code == 400:
+                    # Fallback for tenants with too many sections: use section-by-section retrieval
+                    logger.warning(f"Recent pages endpoint returned 400, falling back to section-based retrieval")
+                    # Retrieve all pages and return most recently modified up to limit
+                    all_pages = await self.get_all_pages()
+                    # Ensure pages are sorted by last modified date
+                    all_pages.sort(key=lambda p: p.last_modified_date_time, reverse=True)
+                    return all_pages[:limit]
                 else:
                     raise OneNoteSearchError(f"Failed to get recent pages: {response.status_code}")
 

@@ -70,6 +70,7 @@ class OneNoteCLI:
             '/semantic': self._semantic_search,
             '/stats': self._show_semantic_stats,
             '/reset-index': self._reset_semantic_index,
+            '/status': self._show_rate_limit_status,
             '/starters': self._show_conversation_starters,
             '/clear': self._clear_history,
             '/quit': self._quit_chat,
@@ -623,6 +624,45 @@ Stay organized! 📚✨
 
         except Exception as e:
             self.console.print(f"[red]❌ Error getting semantic search stats: {e}[/red]")
+            return True
+
+    async def _show_rate_limit_status(self) -> bool:
+        """Show current API rate limit status."""
+        try:
+            # Get rate limit status from search tool
+            if not hasattr(self.agent, 'search_tool') or not self.agent.search_tool:
+                self.console.print("[yellow]📊 Rate limit information is not available.[/yellow]")
+                return True
+
+            status = self.agent.search_tool.get_rate_limit_status()
+
+            # Display status in a formatted way
+            self.console.print("[bold blue]📊 API Rate Limit Status[/bold blue]\n")
+
+            # Current usage
+            self.console.print(f"📞 API Requests Made: {status['requests_made']}/{status['requests_limit']}")
+            self.console.print(f"📈 Usage: {status['percentage_used']:.1f}%")
+
+            # Time window
+            self.console.print(f"⏱️ Window Elapsed: {status['window_elapsed_minutes']:.1f} minutes")
+            self.console.print(f"⏳ Window Remaining: {status['window_remaining_minutes']:.1f} minutes")
+
+            # Status indicators
+            if status['is_approaching_limit']:
+                self.console.print("[yellow]⚠️ Approaching rate limit - consider waiting or using more specific searches[/yellow]")
+            else:
+                self.console.print("[green]✅ Rate limit usage is normal[/green]")
+
+            # Tips
+            self.console.print("\n[dim]💡 Tips to reduce API usage:[/dim]")
+            self.console.print("[dim]  • Use more specific search terms[/dim]")
+            self.console.print("[dim]  • Use /semantic for indexed content searches[/dim]")
+            self.console.print("[dim]  • Wait for rate limit window to reset if needed[/dim]")
+
+            return True
+
+        except Exception as e:
+            self.console.print(f"[red]❌ Error getting rate limit status: {e}[/red]")
             return True
 
     async def _reset_semantic_index(self) -> bool:

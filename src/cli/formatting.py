@@ -402,6 +402,7 @@ Just type your questions naturally! Examples:
 - **`/notebooks`** - List all your OneNote notebooks
 - **`/recent`** - Show recently modified pages
 - **`/content <title>`** - Display full content of a page by title
+- **`/status`** - Show current API rate limit status
 - **`/starters`** - Show example conversation starters
 - **`/clear`** - Clear conversation history
 - **`/quit`** or **`/exit`** - Exit the application

@@ -24,6 +24,7 @@ This file tracks all project tasks using a priority-based system optimized for s
 - [x] Add comprehensive logging system to project with file output and clean startup
 - [x] Add /content command to display OneNote page content by title
 - [x] ✅ **COMPLETED**: Add authenticated user information to --info command output - 2025-07-18
+- [x] ✅ **COMPLETED**: Fix Microsoft Graph API 400 error for search and recent pages - 2025-07-20
 - [ ] **CURRENT: Implement Semantic Search Enhancement per PRP** - 2025-07-17
 - [ ] Improve test coverage to achieve at least 80% code coverage
 
@@ -227,5 +228,22 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&
 - **Project Evolution**: Track how project structure changes over time
 
 **NO EXCEPTIONS - Always log before deleting!**
+
+### July 20, 2025
+- **✅ COMPLETED: Fixed Microsoft Graph API 400 Error for Search and Recent Pages** 
+  - **Issue**: Search queries and `/recent` command failing with error 400 (code 20266) for accounts with many sections
+  - **Root Cause**: Microsoft Graph `/me/onenote/pages` endpoint cannot handle accounts with 40+ sections
+  - **Solution**: Enhanced existing fallback mechanisms in search methods to use section-by-section retrieval 
+  - **Impact**: Both search functionality and recent pages now work correctly for all account sizes
+  - **Verification**: Confirmed existing fallback methods were already implemented and working
+  - **Files Modified**: Updated `get_recent_pages()` in `src/tools/onenote_search.py` with 400 error handling
+
+- **✅ COMPLETED: Optimized Rate Limiting for Recent Pages Fallback** 
+  - **Issue**: Rate limiting causing 7+ minute waits when `/recent` command fallback retrieved 132 pages instead of 10
+  - **Root Cause**: Fallback method called `get_all_pages()` without limit, triggering excessive API calls
+  - **Solution**: Implemented optimized `_get_recent_pages_fallback()` method with intelligent processing limits
+  - **Enhancements**: Added smart rate limiting, user feedback via `/status` command, and better error handling
+  - **Impact**: Reduced API calls from 132+ to ~15 for fallback, eliminated long waits, improved user experience
+  - **Files Modified**: `src/tools/onenote_search.py`, `src/cli/interface.py`, `src/cli/formatting.py`
 
 ## Project Workflow Integration

@@ -416,6 +416,57 @@ class VectorStore:
             logger.error(f"Error resetting vector store: {e}")
             raise VectorStoreError(f"Failed to reset vector store: {e}")
 
+    @logged("Clear all vector store data")
+    async def clear_all_data(self) -> None:
+        """
+        Clear all data from the vector store and reset it completely.
+
+        This method:
+        - Deletes the entire collection and all embeddings
+        - Recreates a fresh empty collection
+        - Resets all internal state
+
+        Raises:
+            VectorStoreError: If clearing data fails
+        """
+        try:
+            logger.info("Clearing all vector store data...")
+
+            # Reset the collection (deletes all data and recreates empty collection)
+            await self.reset_storage()
+
+            # Reset operation counter
+            self._operation_count = 0
+
+            logger.info("✅ All vector store data cleared successfully")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to clear vector store data: {e}")
+            raise VectorStoreError(f"Failed to clear all data: {e}")
+
+    def close(self) -> None:
+        """
+        Close the ChromaDB connection and clean up resources.
+
+        This ensures that all file handles are properly closed
+        and the database files can be safely deleted.
+        """
+        try:
+            if self._collection is not None:
+                self._collection = None
+                logger.debug("Closed collection reference")
+
+            if self._client is not None:
+                # ChromaDB doesn't have an explicit close method, but we can
+                # clear the reference to allow garbage collection
+                self._client = None
+                logger.debug("Closed client reference")
+
+            logger.info("✅ Vector store connection closed")
+
+        except Exception as e:
+            logger.warning(f"Error closing vector store connection: {e}")
+
     def get_operation_stats(self) -> Dict[str, Any]:
         """
         Get operation statistics for the vector store.

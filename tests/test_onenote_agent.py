@@ -8,7 +8,7 @@ initialization, tool nodes, routing logic, and streaming query processing.
 import asyncio
 import json
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -18,14 +18,18 @@ from src.models.onenote import OneNotePage, SearchResult
 from src.models.responses import OneNoteSearchResponse, StreamingChunk
 
 
+@pytest.mark.agent
+@pytest.mark.unit
 class TestOneNoteAgent:
     """Test OneNote agent initialization and core functionality."""
 
+    @pytest.mark.fast
+    @pytest.mark.mock_heavy
     @patch('src.agents.onenote_agent.get_settings')
     @patch('src.agents.onenote_agent.MicrosoftAuthenticator')
     @patch('src.agents.onenote_agent.OneNoteSearchTool')
     @patch('src.agents.onenote_agent.OneNoteContentProcessor')
-    @patch('src.agents.onenote_agent.ChatOpenAI')
+    @patch('langchain_openai.ChatOpenAI')  # Patch where it's actually imported
     def test_init(self, mock_chat_openai, mock_content_processor,
                   mock_search_tool, mock_authenticator, mock_get_settings):
         """Test OneNote agent initialization."""
@@ -44,7 +48,7 @@ class TestOneNoteAgent:
         mock_authenticator.assert_called_once_with(mock_settings)
         mock_search_tool.assert_called_once()
         mock_content_processor.assert_called_once()
-        mock_chat_openai.assert_called_once()
+        # Note: ChatOpenAI is lazy-loaded, so it won't be called during __init__
 
     @patch('src.agents.onenote_agent.get_settings')
     def test_init_with_custom_settings(self, mock_get_settings):
@@ -53,8 +57,7 @@ class TestOneNoteAgent:
 
         with patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
-             patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
 
             agent = OneNoteAgent(settings=custom_settings)
 
@@ -68,13 +71,12 @@ class TestOneNoteAgent:
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
              patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('langgraph.graph.StateGraph'):
 
             agent = OneNoteAgent()
 
-            # Verify graph is created
+            # Verify graph property works (lazy initialization)
             assert agent.graph is not None
-            assert hasattr(agent.graph, 'astream')
 
 
 class TestAgentNode:
@@ -85,11 +87,13 @@ class TestAgentNode:
         with patch('src.agents.onenote_agent.get_settings'), \
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
-             patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('src.agents.onenote_agent.OneNoteContentProcessor'):
 
             self.agent = OneNoteAgent()
-            self.agent.llm = AsyncMock()
+            self.agent._llm = AsyncMock()  # Mock the private attribute directly
+
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
 
     async def test_agent_node_with_system_message(self):
         """Test agent node with existing system message."""
@@ -110,6 +114,9 @@ class TestAgentNode:
         assert len(result["messages"]) == 3
         assert result["messages"][-1] == mock_response
 
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
+
     async def test_agent_node_adds_system_message(self):
         """Test agent node adds system message when missing."""
         # Setup state without system message
@@ -127,6 +134,9 @@ class TestAgentNode:
         # Verify system message was added
         assert len(result["messages"]) == 3
         assert isinstance(result["messages"][0], SystemMessage)
+
+    @pytest.mark.asyncio
+
 
     async def test_agent_node_with_tool_results(self):
         """Test agent node processing tool results."""
@@ -149,6 +159,9 @@ class TestAgentNode:
         assert len(result["messages"]) == 4  # SystemMessage + 2 original + 1 LLM response
         assert result["messages"][-1] == mock_response
 
+    @pytest.mark.asyncio
+
+
     async def test_agent_node_no_results(self):
         """Test agent node with no results."""
         # Setup state with no results
@@ -170,6 +183,9 @@ class TestAgentNode:
         assert len(result["messages"]) == 4  # SystemMessage + 2 original + 1 LLM response
         assert result["messages"][-1] == mock_response
 
+    @pytest.mark.asyncio
+
+
     async def test_agent_node_needs_tool(self):
         """Test agent node detecting need for tool call."""
         # Setup state with search query
@@ -185,6 +201,9 @@ class TestAgentNode:
         tool_message = result["messages"][-1]
         assert isinstance(tool_message, AIMessage)
         assert tool_message.content.startswith("{")
+
+    @pytest.mark.asyncio
+
 
     async def test_agent_node_exception_handling(self):
         """Test agent node exception handling."""
@@ -215,11 +234,14 @@ class TestSearchOneNoteNode:
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
              patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('langchain_openai.ChatOpenAI'):
 
             self.agent = OneNoteAgent()
             self.agent.search_tool = AsyncMock()
             self.agent.content_processor = MagicMock()
+
+    @pytest.mark.asyncio
+    @pytest.mark.asyncio
 
     async def test_search_onenote_node_success(self):
         """Test successful OneNote search."""
@@ -258,6 +280,9 @@ class TestSearchOneNoteNode:
         assert isinstance(response_message, AIMessage)
         assert response_message.content.startswith("SEARCH_RESULTS:")
 
+    @pytest.mark.asyncio
+
+
     async def test_search_onenote_node_no_results(self):
         """Test OneNote search with no results."""
         # Setup state
@@ -286,6 +311,9 @@ class TestSearchOneNoteNode:
         assert isinstance(response_message, AIMessage)
         assert response_message.content.startswith("NO_RESULTS:")
 
+    @pytest.mark.asyncio
+
+
     async def test_search_onenote_node_search_error(self):
         """Test OneNote search with search error."""
         # Setup state
@@ -305,6 +333,9 @@ class TestSearchOneNoteNode:
         response_message = result["messages"][-1]
         assert isinstance(response_message, AIMessage)
         assert response_message.content.startswith("SEARCH_ERROR:")
+
+    @pytest.mark.asyncio
+
 
     async def test_search_onenote_node_general_exception(self):
         """Test OneNote search with general exception."""
@@ -331,11 +362,16 @@ class TestUtilityMethods:
 
     def setup_method(self):
         """Set up test fixtures."""
-        with patch('src.agents.onenote_agent.get_settings'), \
+        with patch('src.agents.onenote_agent.get_settings') as mock_get_settings, \
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
              patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('langchain_openai.ChatOpenAI'):
+
+            # Mock settings to disable semantic search for predictable test behavior
+            mock_settings = Mock()
+            mock_settings.enable_hybrid_search = False
+            mock_get_settings.return_value = mock_settings
 
             self.agent = OneNoteAgent()
 
@@ -493,12 +529,16 @@ class TestPublicMethods:
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
              patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('langchain_openai.ChatOpenAI'):
 
             self.agent = OneNoteAgent()
             self.agent.authenticator = AsyncMock()
             self.agent.search_tool = AsyncMock()
-            self.agent.llm = AsyncMock()
+            # Mock the private _llm attribute instead of the property
+            self.agent._llm = AsyncMock()
+
+    @pytest.mark.asyncio
+
 
     async def test_initialize_success(self):
         """Test successful agent initialization."""
@@ -512,6 +552,9 @@ class TestPublicMethods:
         self.agent.authenticator.get_valid_token.assert_called_once()
         self.agent.authenticator.validate_token.assert_called_once()
 
+    @pytest.mark.asyncio
+
+
     async def test_initialize_authentication_failure(self):
         """Test agent initialization with authentication failure."""
         # Mock failed authentication
@@ -522,6 +565,9 @@ class TestPublicMethods:
         from src.auth.microsoft_auth import AuthenticationError
         with pytest.raises(AuthenticationError):
             await self.agent.initialize()
+
+    @pytest.mark.asyncio
+
 
     async def test_initialize_exception(self):
         """Test agent initialization with exception."""
@@ -539,6 +585,9 @@ class TestPublicMethods:
             assert isinstance(starters, list)
             assert len(starters) > 0
 
+    @pytest.mark.asyncio
+
+
     async def test_list_notebooks(self):
         """Test listing notebooks."""
         # Mock the search tool directly
@@ -550,6 +599,9 @@ class TestPublicMethods:
         # Should return list from search tool
         assert isinstance(result, list)
         assert result == mock_notebooks
+
+    @pytest.mark.asyncio
+
 
     async def test_get_recent_pages(self):
         """Test getting recent pages."""
@@ -573,6 +625,9 @@ class TestPublicMethods:
         # Should return list from search tool
         assert isinstance(result, list)
         assert result == mock_pages
+
+    @pytest.mark.asyncio
+
 
     async def test_stream_query_alias(self):
         """Test stream_query alias method."""

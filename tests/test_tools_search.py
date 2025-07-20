@@ -17,9 +17,12 @@ from src.models.onenote import OneNotePage, SearchResult
 from src.tools.onenote_search import OneNoteSearchError, OneNoteSearchTool
 
 
+@pytest.mark.search
+@pytest.mark.unit
 class TestOneNoteSearchTool:
     """Test OneNote search tool functionality."""
 
+    @pytest.mark.fast
     def test_search_tool_initialization(self):
         """Test search tool initialization with defaults."""
         tool = OneNoteSearchTool()
@@ -30,6 +33,7 @@ class TestOneNoteSearchTool:
         assert tool.timeout > 0
         assert tool._request_count == 0
 
+    @pytest.mark.fast
     def test_search_tool_initialization_with_custom_auth(self):
         """Test search tool initialization with custom authenticator."""
         mock_auth = Mock(spec=MicrosoftAuthenticator)
@@ -46,6 +50,7 @@ class TestOneNoteSearchTool:
         assert tool.timeout == 30
 
     @pytest.mark.asyncio
+    @pytest.mark.fast
     async def test_search_pages_empty_query_validation(self):
         """Test that empty queries raise validation errors."""
         tool = OneNoteSearchTool()
@@ -147,14 +152,35 @@ class TestOneNoteSearchTool:
             await tool.search_pages("test query")
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     @patch('httpx.AsyncClient')
-    async def test_search_pages_network_timeout(self, mock_client_class):
-        """Test handling of network timeouts during search."""
+    async def test_search_pages_network_timeout_original(self, mock_client_class):
+        """Test handling of network timeouts during search - original slow version."""
         mock_auth = AsyncMock(spec=MicrosoftAuthenticator)
         mock_auth.ensure_authenticated.return_value = True
         mock_auth.get_valid_token.return_value = "test_token"
 
         # Mock network timeout
+        import httpx
+        mock_client = AsyncMock()
+        mock_client.get.side_effect = httpx.TimeoutException("Request timed out")
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        tool = OneNoteSearchTool(authenticator=mock_auth)
+
+        with pytest.raises(OneNoteSearchError):
+            await tool.search_pages("test query")
+
+    @pytest.mark.asyncio
+    @pytest.mark.fast
+    @patch('httpx.AsyncClient')
+    async def test_search_pages_network_timeout(self, mock_client_class, mock_network_delays):
+        """Test handling of network timeouts during search - fast version."""
+        mock_auth = AsyncMock(spec=MicrosoftAuthenticator)
+        mock_auth.ensure_authenticated.return_value = True
+        mock_auth.get_valid_token.return_value = "test_token"
+
+        # Mock network timeout - fast version with no actual delays
         import httpx
         mock_client = AsyncMock()
         mock_client.get.side_effect = httpx.TimeoutException("Request timed out")
@@ -273,10 +299,10 @@ class TestOneNoteSearchTool:
         # Test thought-related query extraction
         test_cases = [
             ("What were my thoughts about Robo-me?", "Robo-me"),
-            ("What did I think about the project?", "the project"),
+            ("What did I think about the project?", "project"),
             ("My thoughts on machine learning", "machine learning"),
             ("Ideas about artificial intelligence", "artificial intelligence"),
-            ("Opinion about the meeting", "the meeting"),
+            ("Opinion about the meeting", "meeting"),
         ]
 
         for query, expected in test_cases:

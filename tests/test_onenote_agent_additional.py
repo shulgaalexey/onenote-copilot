@@ -57,7 +57,7 @@ class TestOneNoteAgentAdditional:
         # Mock the LLM response
         mock_response = AIMessage(content="I couldn't find any pages matching your search.")
 
-        with patch.object(agent, 'llm') as mock_llm, \
+        with patch.object(agent, '_llm') as mock_llm, \
              patch('src.agents.onenote_agent.get_system_prompt', return_value="System prompt"), \
              patch('src.agents.onenote_agent.get_no_results_prompt', return_value="No results prompt"):
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
@@ -90,7 +90,7 @@ class TestOneNoteAgentAdditional:
 
         mock_response = AIMessage(content="Here are your recent pages...")
 
-        with patch.object(agent, 'llm') as mock_llm:
+        with patch.object(agent, '_llm') as mock_llm:
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
             result = await agent._agent_node(state)
@@ -120,7 +120,7 @@ class TestOneNoteAgentAdditional:
 
         mock_response = AIMessage(content="Here are your OneNote notebooks...")
 
-        with patch.object(agent, 'llm') as mock_llm:
+        with patch.object(agent, '_llm') as mock_llm:
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
             result = await agent._agent_node(state)
@@ -188,7 +188,7 @@ class TestOneNoteAgentAdditional:
         mock_response = AIMessage(content="OneNote is a digital note-taking application...")
 
         with patch.object(agent, '_needs_tool_call', return_value=False), \
-             patch.object(agent, 'llm') as mock_llm:
+             patch.object(agent, '_llm') as mock_llm:
 
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
@@ -215,7 +215,7 @@ class TestOneNoteAgentAdditional:
 
         mock_response = AIMessage(content="How can I help you today?")
 
-        with patch.object(agent, 'llm') as mock_llm:
+        with patch.object(agent, '_llm') as mock_llm:
             mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
             result = await agent._agent_node(state)
@@ -261,7 +261,9 @@ class TestOneNoteAgentAdditional:
             "what is OneNote?",
             "how does note-taking work?",
             "explain digital organization",
-            "tell me about productivity"
+            "hello there",
+            "what is your name?",
+            "how are you today?"
         ]
 
         for query in test_cases:

@@ -134,25 +134,25 @@ class TestLoggingFunctions:
     def test_log_performance(self, caplog):
         """Test performance logging function."""
         with caplog.at_level(logging.INFO):
-            log_performance("test_function", 0.123, param1="value1", param2="value2")
+            log_performance("test_function", 0.123, count=5, operation="search")
 
-        assert "⚡ test_function: 0.123s" in caplog.text
-        assert "param1=value1" in caplog.text
-        assert "param2=value2" in caplog.text
+        assert "[NORM] test_function: 123ms" in caplog.text
+        assert "count=5" in caplog.text
+        assert "operation=search" in caplog.text
 
     def test_log_api_call_success(self, caplog):
         """Test API call logging for successful requests."""
         with caplog.at_level(logging.INFO):
             log_api_call("GET", "https://example.com/api", 200, 0.456)
 
-        assert "✅ GET https://example.com/api - 200 (0.456s)" in caplog.text
+        assert "[SUCCESS] GET https://example.com/api - 200 (0.456s)" in caplog.text
 
     def test_log_api_call_error(self, caplog):
         """Test API call logging for failed requests."""
         with caplog.at_level(logging.ERROR):
             log_api_call("POST", "https://example.com/api", error="Network timeout")
 
-        assert "❌ POST https://example.com/api - Error: Network timeout" in caplog.text
+        assert "[ERROR] POST https://example.com/api - Error: Network timeout" in caplog.text
 
     def test_log_api_call_sanitizes_token(self, caplog):
         """Test that API logging sanitizes access tokens."""
@@ -167,17 +167,17 @@ class TestLoggingFunctions:
         # Success (2xx)
         with caplog.at_level(logging.INFO):
             log_api_call("GET", "https://example.com", 201)
-        assert "✅" in caplog.records[-1].getMessage()
+        assert "[SUCCESS]" in caplog.records[-1].getMessage()
 
         # Client error (4xx)
         with caplog.at_level(logging.WARNING):
             log_api_call("GET", "https://example.com", 404)
-        assert "⚠️" in caplog.records[-1].getMessage()
+        assert "[CLIENT_ERROR]" in caplog.records[-1].getMessage()
 
         # Server error (5xx)
         with caplog.at_level(logging.ERROR):
             log_api_call("GET", "https://example.com", 500)
-        assert "❌" in caplog.records[-1].getMessage()
+        assert "[SERVER_ERROR]" in caplog.records[-1].getMessage()
 
 
 class TestLoggedDecorator:
@@ -194,8 +194,8 @@ class TestLoggedDecorator:
             result = test_function()
 
         assert result == "success"
-        assert "🔄 test_function()" in caplog.text
-        assert "✅ test_function completed" in caplog.text
+        assert "[ENTER] test_function()" in caplog.text
+        assert "[EXIT] test_function completed" in caplog.text
 
     def test_logged_function_with_args(self, caplog):
         """Test logged decorator with argument logging."""
@@ -207,7 +207,7 @@ class TestLoggedDecorator:
             result = test_function("a", "b", kwarg1="c")
 
         assert result == "a-b-c"
-        assert "🔄 test_function(a, b, kwarg1=c)" in caplog.text
+        assert "[ENTER] test_function(a, b, kwarg1=c)" in caplog.text
 
     def test_logged_function_exception(self, caplog):
         """Test logged decorator with exception handling."""
@@ -215,11 +215,12 @@ class TestLoggedDecorator:
         def failing_function():
             raise ValueError("Test error")
 
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.DEBUG):  # Need DEBUG level to see ENTER log
             with pytest.raises(ValueError):
                 failing_function()
 
-        assert "❌ failing_function failed" in caplog.text
+        assert "[ENTER] failing_function()" in caplog.text
+        assert "[FAIL] failing_function failed" in caplog.text
         assert "Test error" in caplog.text
 
     @pytest.mark.asyncio
@@ -234,8 +235,8 @@ class TestLoggedDecorator:
             result = await async_test_function()
 
         assert result == "async_success"
-        assert "🔄 async_test_function()" in caplog.text
-        assert "✅ async_test_function completed" in caplog.text
+        assert "[ENTER] async_test_function()" in caplog.text
+        assert "[EXIT] async_test_function completed" in caplog.text
 
     @pytest.mark.asyncio
     async def test_logged_async_function_exception(self, caplog):
@@ -244,11 +245,12 @@ class TestLoggedDecorator:
         async def async_failing_function():
             raise RuntimeError("Async test error")
 
-        with caplog.at_level(logging.ERROR):
+        with caplog.at_level(logging.DEBUG):  # Need DEBUG level to see ENTER log
             with pytest.raises(RuntimeError):
                 await async_failing_function()
 
-        assert "❌ async_failing_function failed" in caplog.text
+        assert "[ENTER] async_failing_function()" in caplog.text
+        assert "[FAIL] async_failing_function failed" in caplog.text
         assert "Async test error" in caplog.text
 
     def test_logged_function_custom_logger(self, caplog):
@@ -284,10 +286,11 @@ class TestLoggingIntegration:
             try:
                 logger_system.setup_logging()
 
-                # Check that external loggers are set to WARNING level
+                # Check that external loggers are set to appropriate levels
                 assert logging.getLogger("httpx").level == logging.WARNING
                 assert logging.getLogger("urllib3").level == logging.WARNING
-                assert logging.getLogger("msal").level == logging.WARNING
+                # msal is intentionally set to INFO level to keep auth info visible
+                assert logging.getLogger("msal").level == logging.INFO
             finally:
                 # Cleanup file handlers to prevent Windows permission issues
                 logger_system.cleanup()
@@ -306,10 +309,15 @@ class TestLoggingIntegration:
             try:
                 logger_system.setup_logging()
 
-                # In debug mode, external loggers should not be suppressed
-                # (They should inherit the root logger level)
+                # In debug mode, external loggers are still controlled
+                # but some are more verbose than in normal mode
                 httpx_logger = logging.getLogger("httpx")
-                assert httpx_logger.level <= logging.DEBUG
+                # httpx is set to INFO level even in debug mode to reduce noise
+                assert httpx_logger.level == logging.INFO
+
+                # msal should be more verbose in debug mode
+                msal_logger = logging.getLogger("msal")
+                assert msal_logger.level == logging.DEBUG
             finally:
                 # Cleanup file handlers to prevent Windows permission issues
                 logger_system.cleanup()

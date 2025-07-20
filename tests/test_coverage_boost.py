@@ -152,7 +152,7 @@ class TestAgentUtilityMethods:
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
              patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('langchain_openai.ChatOpenAI'):
 
             agent = OneNoteAgent()
 
@@ -173,7 +173,7 @@ class TestAgentUtilityMethods:
              patch('src.agents.onenote_agent.MicrosoftAuthenticator'), \
              patch('src.agents.onenote_agent.OneNoteSearchTool'), \
              patch('src.agents.onenote_agent.OneNoteContentProcessor'), \
-             patch('src.agents.onenote_agent.ChatOpenAI'):
+             patch('langchain_openai.ChatOpenAI'):
 
             agent = OneNoteAgent()
 

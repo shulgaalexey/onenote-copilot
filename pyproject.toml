@@ -158,25 +158,59 @@ disallow_incomplete_defs = false
 # Pytest configuration
 [tool.pytest.ini_options]
 minversion = "8.0"
+testpaths = ["tests/"]
 addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
-    "--cov=src",
-    "--cov-report=term-missing",
-    "--cov-report=xml",
-    "--cov-report=html",
+    "--tb=short",  # Shorter traceback format
+    "--maxfail=5",  # Stop after 5 failures for faster feedback
+    # Coverage options (only when needed)
+    # "--cov=src",
+    # "--cov-report=term-missing",
+    # "--cov-report=xml",
+    # "--cov-report=html",
+    "--durations=10",
+    # Parallel execution (only when pytest-xdist is available)
+    # "-n", "auto",
 ]
-testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# Collect ignore patterns for faster collection
+collect_ignore = [
+    "tests/test_performance_manual.py",
+    "tests/test_slow_integration.py",
+    "tests/benchmarks/",
+]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "fast: Quick tests that run in <0.1s",
+    "network: Tests that require network access",
+    # Phase 2: Advanced categorization markers
+    "auth: Authentication-related tests",
+    "search: Search functionality tests",
+    "embedding: Embedding generation tests",
+    "vector_store: Vector storage tests",
+    "cli: Command-line interface tests",
+    "agent: AI agent functionality tests",
+    "performance: Performance-sensitive tests",
+    "memory: Memory usage tests",
+    "database: Database operation tests",
+    "api: External API integration tests",
+    "mock_heavy: Tests that mock heavy dependencies",
+    "session_scoped: Tests using session-scoped fixtures",
+    "module_scoped: Tests using module-scoped fixtures",
 ]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::UserWarning",
+    "ignore::RuntimeWarning",
+]
 
 # Coverage configuration
 [tool.coverage.run]

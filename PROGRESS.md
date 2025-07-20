@@ -65,6 +65,33 @@ python -m src.main logout             # Multi-user data cleanup
 
 **Current Status:** Production-ready with comprehensive validation through 404 passing tests covering agent processing, semantic search, authentication, CLI interface, and error handling systems.
 
+## 🎯 Issue RESOLVED: Index Command 400 Error - ✅ **COMPLETED** (July 20, 2025)
+
+**Problem**: `/index` command fails with "Failed to get pages: 400" error  
+**Root Cause**: API error 20266 - "The number of maximum sections is exceeded for this request"  
+**Solution**: ✅ **IMPLEMENTED** - Modified to fetch pages section-by-section instead of all at once
+
+**Microsoft Graph API Error Details**:
+- Error Code: 20266
+- Message: "To get pages for accounts with a high number of sections, we recommend getting pages for one section at a time (use the ~/sections/{id}/pages API)"
+- Previous endpoint: `/me/onenote/pages` (failed with 41+ sections)
+- **Fixed endpoint**: Now uses `/me/onenote/sections/{id}/pages` for each section
+
+**✅ Solution Implemented**:
+1. ✅ Modified `get_all_pages()` method in `src/tools/onenote_search.py`
+2. ✅ Added `_get_all_sections()` helper method  
+3. ✅ Added `_get_pages_from_section()` helper method
+4. ✅ Tested successfully with 41 sections
+
+**📊 Final Indexing Results**:
+- **Total Pages Found**: 100 pages across 41 sections
+- **Successfully Indexed**: 92 pages with 200 content chunks  
+- **Failed to Index**: 8 pages (all "Untitled Page" with no content - expected behavior)
+- **Success Rate**: 92% (92/100 pages successfully indexed)
+- **Performance**: Section-by-section approach works efficiently
+
+**🎉 Issue Status**: **RESOLVED** - Indexing now works correctly for accounts with many sections
+
 ## Links
 - Current Task File: [TASK.md](prompts/TASK.md)
 - Pytest Optimization Guide: [PYTEST_STARTUP_OPTIMIZATION.md](docs/PYTEST_STARTUP_OPTIMIZATION.md)

@@ -39,6 +39,15 @@ class ContentChangeType(str, Enum):
     NO_CHANGE = "no_change"
 
 
+class DownloadStatus(str, Enum):
+    """Status of asset download operations."""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    COMPLETED_WITH_ERRORS = "completed_with_errors"
+
+
 class AssetInfo(BaseModel):
     """Information about an asset (image, file) to be downloaded."""
     
@@ -67,6 +76,86 @@ class ExternalLink(BaseModel):
     url: str = Field(..., description="External URL")
     link_text: str = Field(..., description="Display text of the link")
     title: Optional[str] = Field(None, description="Link title attribute")
+
+
+class LinkInfo(BaseModel):
+    """Information about a link found in content."""
+    
+    original_url: str = Field(..., description="Original URL from the content")
+    resolved_path: str = Field(default="", description="Resolved local path")
+    link_text: str = Field(..., description="Display text of the link")
+    link_type: str = Field(..., description="Type of link (page, section, external)")
+    resolution_status: str = Field(default="pending", description="Resolution status")
+    error_message: Optional[str] = Field(None, description="Error message if resolution failed")
+
+
+class MarkdownConversionResult(BaseModel):
+    """Result of HTML to Markdown conversion."""
+    
+    success: bool = Field(default=False, description="Whether conversion succeeded")
+    original_html: str = Field(default="", description="Original HTML content")
+    markdown_content: str = Field(default="", description="Converted markdown content")
+    
+    # Conversion statistics
+    elements_converted: int = Field(default=0, description="Number of HTML elements converted")
+    assets_linked: int = Field(default=0, description="Number of assets linked")
+    internal_links_resolved: int = Field(default=0, description="Number of internal links resolved")
+    external_links_preserved: int = Field(default=0, description="Number of external links preserved")
+    
+    # Issues and warnings
+    warnings: List[str] = Field(default_factory=list, description="Conversion warnings")
+    error: Optional[str] = Field(None, description="Error message if conversion failed")
+    
+    # Timing
+    conversion_time_seconds: float = Field(default=0.0, description="Time taken for conversion")
+
+
+class LinkResolutionResult(BaseModel):
+    """Result of link resolution operations."""
+    
+    success: bool = Field(default=False, description="Whether resolution succeeded")
+    total_links: int = Field(default=0, description="Total number of links to resolve")
+    resolved_count: int = Field(default=0, description="Number of successfully resolved links")
+    failed_count: int = Field(default=0, description="Number of failed resolutions")
+    
+    # Results
+    resolved_links: List[LinkInfo] = Field(default_factory=list, description="Successfully resolved links")
+    failed_links: List[LinkInfo] = Field(default_factory=list, description="Failed link resolutions")
+    
+    # Error information
+    error: Optional[str] = Field(None, description="Error message if batch resolution failed")
+
+
+class AssetDownloadResult(BaseModel):
+    """Result of asset download operations."""
+    
+    status: DownloadStatus = Field(default=DownloadStatus.PENDING, description="Overall download status")
+    total_assets: int = Field(default=0, description="Total number of assets to download")
+    successful_count: int = Field(default=0, description="Number of successful downloads")
+    failed_count: int = Field(default=0, description="Number of failed downloads") 
+    total_bytes: int = Field(default=0, description="Total bytes downloaded")
+    
+    # Detailed results
+    successful_downloads: List[Dict[str, Any]] = Field(default_factory=list, description="List of successful downloads")
+    failed_downloads: List[Dict[str, Any]] = Field(default_factory=list, description="List of failed downloads with error info")
+    
+    # Timing
+    started_at: Optional[datetime] = Field(None, description="Download start time")
+    completed_at: Optional[datetime] = Field(None, description="Download completion time")
+    
+    @property
+    def duration_seconds(self) -> float:
+        """Get download duration in seconds."""
+        if self.completed_at and self.started_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return 0.0
+        
+    @property
+    def success_rate(self) -> float:
+        """Get success rate as percentage."""
+        if self.total_assets == 0:
+            return 0.0
+        return (self.successful_count / self.total_assets) * 100.0
 
 
 class CachedPageMetadata(BaseModel):
@@ -298,17 +387,6 @@ class DownloadResult(BaseModel):
     error_message: Optional[str] = Field(None, description="Error message if failed")
     download_time_seconds: float = Field(default=0.0)
     retries_attempted: int = Field(default=0)
-
-
-class LinkResolutionResult(BaseModel):
-    """Result of resolving OneNote internal links."""
-    
-    total_links_found: int = Field(default=0)
-    links_resolved: int = Field(default=0)
-    links_failed: int = Field(default=0)
-    internal_links: List[InternalLink] = Field(default_factory=list)
-    external_links: List[ExternalLink] = Field(default_factory=list)
-    unresolved_links: List[str] = Field(default_factory=list)
 
 
 class ConversionResult(BaseModel):

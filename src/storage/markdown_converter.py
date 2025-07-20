@@ -171,7 +171,13 @@ class MarkdownConverter:
             Markdown representation of the element
         """
         if isinstance(element, NavigableString):
-            return str(element).strip()
+            # Preserve whitespace but clean up excessive spaces/newlines
+            text = str(element)
+            if self.preserve_whitespace:
+                return text
+            else:
+                # Normalize whitespace but don't remove all spaces
+                return ' '.join(text.split())
 
         if not isinstance(element, Tag):
             return ""
@@ -201,8 +207,8 @@ class MarkdownConverter:
         parts = []
         for child in element.children:
             converted = self._convert_element(child, asset_lookup, link_lookup)
-            if converted.strip():
-                parts.append(converted)
+            # Don't skip whitespace-only content as it's important for formatting
+            parts.append(converted)
         return ''.join(parts)
 
     def _convert_heading(self, element, asset_lookup: Dict[str, AssetInfo], 
@@ -359,6 +365,10 @@ class MarkdownConverter:
     def _convert_inline_code(self, element, asset_lookup: Dict[str, AssetInfo], 
                             link_lookup: Dict[str, LinkInfo]) -> str:
         """Convert inline code elements."""
+        # If this code element is inside a pre, it should be handled by the pre handler
+        if element.parent and element.parent.name == 'pre':
+            return ""
+        
         content = element.get_text()
         return f"`{content}`"
 
@@ -474,10 +484,10 @@ class MarkdownConverter:
             lines = [line.rstrip() for line in cleaned.split('\n')]
             cleaned = '\n'.join(lines)
             
-            # Remove empty formatting
-            cleaned = re.sub(r'\*\*\s*\*\*', '', cleaned)  # Empty bold
-            cleaned = re.sub(r'\*\s*\*', '', cleaned)      # Empty italic
-            cleaned = re.sub(r'`\s*`', '', cleaned)        # Empty code
+            # Remove empty formatting - be more specific to avoid removing valid formatting
+            cleaned = re.sub(r'\*\*\s+\*\*', '', cleaned)   # Bold with only whitespace
+            cleaned = re.sub(r'(?<!\*)\*\s+\*(?!\*)', '', cleaned)  # Italic with only whitespace (not part of bold)
+            cleaned = re.sub(r'`\s+`', '', cleaned)         # Code with only whitespace
             
             # Clean up list spacing
             cleaned = re.sub(r'\n-\s*\n', '\n- \n', cleaned)

@@ -12,7 +12,8 @@ from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse, parse_qs, unquote
 
 from ..config.settings import get_settings
-from ..models.cache import LinkInfo, LinkResolutionResult, OneNotePage, OneNoteSection
+from ..models.cache import LinkInfo, LinkResolutionResult
+from ..models.onenote import OneNotePage, OneNoteSection
 from .directory_utils import get_content_path_for_page, get_content_path_for_section, sanitize_filename
 
 logger = logging.getLogger(__name__)

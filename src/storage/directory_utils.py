@@ -489,3 +489,41 @@ def get_directory_summary(cache_dir: Path) -> Dict[str, any]:
         summary['error'] = str(e)
     
     return summary
+
+
+def get_content_path_for_page(cache_root: Path, notebook_name: str, section_name: str, page_title: str) -> Path:
+    """
+    Get the expected content path for a specific page.
+    
+    Args:
+        cache_root: Root directory of the cache
+        notebook_name: Name of the parent notebook
+        section_name: Name of the parent section  
+        page_title: Title of the page
+        
+    Returns:
+        Path to the page's markdown file
+    """
+    safe_notebook = sanitize_filename(notebook_name)
+    safe_section = sanitize_filename(section_name)
+    safe_page = sanitize_filename(page_title)
+    
+    return cache_root / "content" / safe_notebook / safe_section / f"{safe_page}.md"
+
+
+def get_content_path_for_section(cache_root: Path, notebook_name: str, section_name: str) -> Path:
+    """
+    Get the expected content path for a specific section.
+    
+    Args:
+        cache_root: Root directory of the cache
+        notebook_name: Name of the parent notebook
+        section_name: Name of the section
+        
+    Returns:
+        Path to the section's directory
+    """
+    safe_notebook = sanitize_filename(notebook_name)
+    safe_section = sanitize_filename(section_name)
+    
+    return cache_root / "content" / safe_notebook / safe_section

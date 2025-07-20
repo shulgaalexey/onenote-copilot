@@ -160,7 +160,18 @@ python -m src.main logout             # Multi-user data cleanup
 
 ---
 
+## 🎯 NEW INITIATIVE: Local OneNote Content Cache - ⚡ **PLANNING** (July 20, 2025)
+
+**Problem**: Slow OneNote API performance and limited search capabilities are causing significant user experience issues  
+**Solution**: ✅ **COMPREHENSIVE PRP CREATED** - Full local caching system with markdown conversion, image downloads, and link preservation
+
+**Created PRP Document**: [OneNote_Local_Cache_System.md](prompts/PRPs/OneNote_Local_Cache_System.md)  
+**Status**: Ready for implementation with detailed technical plan, architecture, and validation approach
+
+---
+
 ## Links
+- **Current Initiative**: [OneNote_Local_Cache_System.md](prompts/PRPs/OneNote_Local_Cache_System.md) ⚡
 - Current Task File: [TASK.md](prompts/TASK.md)
 - Pytest Optimization Guide: [PYTEST_STARTUP_OPTIMIZATION.md](docs/PYTEST_STARTUP_OPTIMIZATION.md)
 - Project Requirements: [Semantic_Search_Enhancement.md](prompts/PRPs/Semantic_Search_Enhancement.md)

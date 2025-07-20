@@ -388,6 +388,9 @@ class MarkdownConverter:
                         language = cls[9:]
                         break
         
+        # Clean up content formatting
+        content = content.strip()
+        
         return f"\n```{language}\n{content}\n```\n\n"
 
     def _convert_table(self, element, asset_lookup: Dict[str, AssetInfo], 
@@ -487,7 +490,7 @@ class MarkdownConverter:
             # Remove empty formatting - be more specific to avoid removing valid formatting
             cleaned = re.sub(r'\*\*\s+\*\*', '', cleaned)   # Bold with only whitespace
             cleaned = re.sub(r'(?<!\*)\*\s+\*(?!\*)', '', cleaned)  # Italic with only whitespace (not part of bold)
-            cleaned = re.sub(r'`\s+`', '', cleaned)         # Code with only whitespace
+            cleaned = re.sub(r'`[ \t]+`', '', cleaned)       # Code with only spaces/tabs (require at least 1)
             
             # Clean up list spacing
             cleaned = re.sub(r'\n-\s*\n', '\n- \n', cleaned)

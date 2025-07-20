@@ -5,6 +5,7 @@ Tests the real LinkResolver implementation with OneNote links and validates
 resolution accuracy, caching, and path generation.
 """
 
+import os
 import pytest
 import tempfile
 from pathlib import Path
@@ -325,7 +326,7 @@ class TestLinkResolverIntegration:
         
         # Test that sections can be found by ID
         assert "section-1234-abcd" in section_lookup
-        assert section_lookup["section-1234-abcd"].name == "Projects"
+        assert section_lookup["section-1234-abcd"].display_name == "Projects"
 
     def test_relative_path_generation(self, resolver, sample_pages, temp_cache_root):
         """Test generation of relative paths to pages and sections."""
@@ -404,7 +405,7 @@ class TestLinkResolverIntegration:
         """Test validation of resolved links."""
         # Create some test files
         content_dir = temp_cache_root / "content"
-        content_dir.mkdir(parents=True)
+        content_dir.mkdir(parents=True, exist_ok=True)
         
         valid_file = content_dir / "valid-page.md"
         valid_file.write_text("# Valid Page")
@@ -491,8 +492,13 @@ class TestLinkResolverIntegration:
         link = create_markdown_link("Test [Link]", "https://example.com/path(with)parens")
         assert link == "[Test \\[Link\\]](https://example.com/path%28with%29parens)"
         
-        # Test absolute path detection
-        assert is_absolute_path("/absolute/path") is True
+        # Test absolute path detection (platform-aware)
+        if os.name == 'nt':  # Windows
+            assert is_absolute_path("C:\\absolute\\path") is True
+            assert is_absolute_path("\\\\server\\share\\path") is True
+            assert is_absolute_path("/unix/style/path") is False
+        else:  # Unix-like
+            assert is_absolute_path("/absolute/path") is True
         assert is_absolute_path("relative/path") is False
         assert is_absolute_path("C:\\Windows\\path") is True
 

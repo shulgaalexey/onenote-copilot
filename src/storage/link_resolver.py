@@ -340,8 +340,14 @@ class LinkResolver:
     def _titles_match(self, title1: str, title2: str) -> bool:
         """Check if two titles match (case-insensitive, normalized)."""
         try:
-            norm1 = re.sub(r'[^\w\s]', '', title1.lower()).strip()
-            norm2 = re.sub(r'[^\w\s]', '', title2.lower()).strip()
+            # Normalize by converting to lowercase and replacing separators with spaces
+            norm1 = re.sub(r'[-_\s]+', ' ', title1.lower()).strip()
+            norm2 = re.sub(r'[-_\s]+', ' ', title2.lower()).strip()
+            
+            # Remove all non-alphanumeric characters and spaces
+            norm1 = re.sub(r'[^\w\s]', '', norm1)
+            norm2 = re.sub(r'[^\w\s]', '', norm2)
+            
             return norm1 == norm2
         except Exception:
             return False
@@ -413,7 +419,7 @@ class LinkResolver:
         try:
             # Get the absolute path to the section directory
             section_path = get_content_path_for_section(
-                self.cache_root, section.notebook_name, section.name
+                self.cache_root, section.notebook_name, section.display_name
             )
             
             # Return relative path
@@ -426,9 +432,9 @@ class LinkResolver:
                 return str(section_path).replace('\\', '/')
 
         except Exception as e:
-            logger.warning(f"Failed to create relative path for section {section.name}: {e}")
+            logger.warning(f"Failed to create relative path for section {section.display_name}: {e}")
             # Fallback: create simple relative path
-            return f"./{sanitize_filename(section.name)}/"
+            return f"./{sanitize_filename(section.display_name)}/"
 
     def is_internal_onenote_link(self, url: str) -> bool:
         """
@@ -543,8 +549,8 @@ class LinkResolver:
             updated_content = re.sub(pattern, replacement, markdown_content)
             
             # Update reference-style links if any
-            ref_pattern = r'^\[([^\]]+)\]:\s*' + re.escape(old_link) + r'.*$'
-            ref_replacement = f'[\\1]: {new_link}'
+            ref_pattern = r'^(\s*)\[([^\]]+)\]:\s*' + re.escape(old_link) + r'.*$'
+            ref_replacement = f'[\\2]: {new_link}'
             updated_content = re.sub(ref_pattern, ref_replacement, updated_content, flags=re.MULTILINE)
             
             return updated_content

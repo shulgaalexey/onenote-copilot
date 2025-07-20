@@ -95,17 +95,19 @@ class MockLinkResolver:
     async def resolve_internal_link(self, link: InternalLink, cache_dir: Path):
         """Mock internal link resolution."""
         return LinkResolutionResult(
-            total_links_found=1,
-            links_resolved=1,
-            links_failed=0
+            success=True,
+            total_links=1,
+            resolved_count=1,
+            failed_count=0
         )
     
     async def resolve_external_link(self, link: ExternalLink):
         """Mock external link resolution."""
         return LinkResolutionResult(
-            total_links_found=1,
-            links_resolved=1,
-            links_failed=0
+            success=True,
+            total_links=1,
+            resolved_count=1,
+            failed_count=0
         )
 
 
@@ -246,7 +248,7 @@ class TestMockLinkResolver:
         )
         
         assert isinstance(result, LinkResolutionResult)
-        assert result.total_links_found == 1
+        assert result.total_links == 1
 
     @pytest.mark.asyncio
     async def test_resolve_external_link(self, link_resolver, sample_external_link):
@@ -254,8 +256,8 @@ class TestMockLinkResolver:
         result = await link_resolver.resolve_external_link(sample_external_link)
         
         assert isinstance(result, LinkResolutionResult)
-        assert result.total_links_found == 1
-        assert result.links_resolved == 1
+        assert result.total_links == 1
+        assert result.resolved_count == 1
 
 
 class TestBasicModels:
@@ -362,14 +364,15 @@ class TestBasicModels:
     def test_link_resolution_result(self):
         """Test LinkResolutionResult."""
         result = LinkResolutionResult(
-            total_links_found=1,
-            links_resolved=1,
-            links_failed=0
+            success=True,
+            total_links=1,
+            resolved_count=1,
+            failed_count=0
         )
         
-        assert result.total_links_found == 1
-        assert result.links_resolved == 1
-        assert result.links_failed == 0
+        assert result.total_links == 1
+        assert result.resolved_count == 1
+        assert result.failed_count == 0
 
 
 class TestIntegration:
@@ -415,7 +418,7 @@ class TestIntegration:
             original_url="onenote:test"
         )
         link_result = await resolver.resolve_internal_link(internal_link, Path("/tmp"))
-        assert link_result.total_links_found == 1
+        assert link_result.total_links == 1
 
     def test_model_compatibility(self):
         """Test that models work together."""

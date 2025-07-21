@@ -464,7 +464,19 @@ class OneNoteContentFetcher:
                 token = await self.onenote_search.authenticator.get_valid_token()
 
                 # Get pages from section
-                pages = await self.onenote_search._get_pages_from_section(section_id, token)
+                onenote_pages = await self.onenote_search._get_pages_from_section(section_id, token)
+
+                # Convert OneNotePage objects to dictionaries for consistency
+                pages = []
+                for page in onenote_pages:
+                    pages.append({
+                        "id": page.id,
+                        "title": page.title,
+                        "lastModifiedDateTime": page.last_modified_date_time.isoformat() if page.last_modified_date_time else None,
+                        "createdDateTime": page.created_date_time.isoformat() if page.created_date_time else None,
+                        "contentUrl": page.content_url,
+                        "webUrl": page.web_url
+                    })
 
                 logger.debug(f"Retrieved {len(pages)} pages from section {section_id}")
                 return pages

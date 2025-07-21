@@ -68,7 +68,10 @@ python -m src.main --auth-only
 - [ ] User can log in with Microsoft credentials
 - [ ] Success message: "✅ Authentication successful!"
 - [ ] Token file created: `data/token_cache.bin`
-- [ ] No error messages displayed
+- [x] No error messages displayed
+
+QA: the user was authenticated earlier, so there were no attempts to re-authenticate.
+
 
 ### Test Case: Token Reuse
 **Priority**: P1 (High)
@@ -80,9 +83,9 @@ python -m src.main --auth-only
 ```
 
 **Validation Points:**
-- [ ] No browser window opens
-- [ ] Immediate success message
-- [ ] Token cache file unchanged
+- [x] No browser window opens
+- [x] Immediate success message
+- [x] Token cache file unchanged
 
 ### Test Case: Invalid Token Handling
 **Priority**: P1 (High)
@@ -107,11 +110,20 @@ python -m src.main
 ```
 
 **Validation Points:**
-- [ ] Rich-formatted welcome message displays
+- [x] Rich-formatted welcome message displays
 - [ ] Application version shown (1.0.0)
-- [ ] Authentication occurs automatically
-- [ ] Chat prompt appears: `>`
+- [x] Authentication occurs automatically
+- [x] Chat prompt appears: `>`
 - [ ] No error messages or warnings
+
+QA: Found this in app logs:
+
+```
+2025-07-21 15:42:49 - src.agents.onenote_agent - WARNING - Error checking local search availability: 'OneNoteCacheManager' object has no attribute 'get_all_cached_pages'
+```
+
+That needs to be investigated.
+
 
 ### Test Case: Help System
 **Priority**: P1 (High)
@@ -135,6 +147,12 @@ python -m src.main
   - `/quit` or `/exit` - Exit application
 - [ ] Command descriptions are clear and accurate
 - [ ] Examples provided where helpful
+
+
+QA: also there are commands printed:
+- `/status - Show current API rate limit status`
+- `• /reset-index - Reset the semantic search index (warning: deletes all indexed data)`
+
 
 ### Test Case: Command Recognition
 **Priority**: P1 (High)
@@ -165,10 +183,17 @@ python -m src.main --info
 ```
 
 **Validation Points:**
-- [ ] `data/onenote_cache/` directory exists
+- [x] `data/onenote_cache/` directory exists
 - [ ] Cache database files created
 - [ ] System info shows cache statistics
 - [ ] Cache size reported (typically 10-100MB)
+
+QA: the settings files and cache directory should be in the folder where the app is. Currently the console shows different folders:
+
+```
+• Settings file: C:\Users\alexeyshulga.onenote_copilot\settings.toml
+• Cache directory: C:\Users\alexeyshulga.onenote_copilot
+```
 
 ### Test Case: Cache Performance
 **Priority**: P0 (Critical)

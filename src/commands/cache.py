@@ -38,7 +38,7 @@ async def cmd_init_cache() -> None:
     - Creates search indexes
     """
     try:
-        console.print("[bold blue]🚀 Initializing OneNote Cache System[/bold blue]")
+        console.print("[bold blue]Initializing OneNote Cache System[/bold blue]")
         console.print("[dim]This will download and index all your OneNote content for faster search...[/dim]\n")
 
         # Initialize settings and authenticator
@@ -46,15 +46,15 @@ async def cmd_init_cache() -> None:
         authenticator = MicrosoftAuthenticator(settings)
 
         # Check authentication
-        console.print("[yellow]🔐 Checking authentication...[/yellow]")
+        console.print("[yellow]Checking authentication...[/yellow]")
 
         # Try to get access token (this will load from cache if available)
         token = await authenticator.get_access_token()
         if not token:
-            console.print("[red]❌ Not authenticated. Please run 'onenote-copilot --auth-only' first.[/red]")
+            console.print("[red]Not authenticated. Please run 'onenote-copilot --auth-only' first.[/red]")
             return
 
-        console.print("[green]✅ Authentication verified[/green]")
+        console.print("[green]Authentication verified[/green]")
 
         # Get user profile for cache initialization
         user_profile = await authenticator.get_user_profile()
@@ -65,41 +65,42 @@ async def cmd_init_cache() -> None:
 
         # Check if cache already exists
         if cache_manager.cache_exists(user_id):
-            console.print(f"[yellow]⚠️  Cache already exists for user: {user_id}[/yellow]")
+            console.print(f"[yellow]  Cache already exists for user: {user_id}[/yellow]")
             console.print("[dim]Use 'onenote-copilot cache --rebuild' to rebuild existing cache[/dim]")
             return
 
         # Initialize cache directory
-        console.print("[yellow]📁 Creating cache directory structure...[/yellow]")
+        console.print("[yellow]Creating cache directory structure...[/yellow]")
         await cache_manager.initialize_user_cache(user_id)
-        console.print("[green]✅ Cache directories created[/green]")
+        console.print("[green]Cache directories created[/green]")
 
         # Initialize content fetcher
         onenote_search = OneNoteSearchTool(authenticator, settings)
         content_fetcher = OneNoteContentFetcher(cache_manager, onenote_search)
 
         # Get content overview first
-        console.print("[yellow]🔍 Scanning OneNote content...[/yellow]")
+        console.print("[yellow]Scanning OneNote content...[/yellow]")
         with console.status("[bold blue]Fetching notebooks...", spinner="dots"):
             notebooks = await content_fetcher._get_all_notebooks()
 
         if not notebooks:
-            console.print("[yellow]⚠️  No OneNote content found.[/yellow]")
+            console.print("[yellow]  No content found to cache.[/yellow]")
             console.print("[dim]Make sure you have notebooks in your OneNote account.[/dim]")
             return
 
         # Show content overview
-        console.print(f"[green]✅ Found {len(notebooks)} notebook(s)[/green]")
+        console.print(f"[green]Found {len(notebooks)} notebook(s)[/green]")
 
         # Start cache initialization
-        console.print("\n[bold yellow]🔄 Starting cache initialization...[/bold yellow]")
+        console.print("\n[bold yellow]Starting cache initialization...[/bold yellow]")
 
-        # Use incremental sync manager for initialization
-        sync_manager = IncrementalSyncManager(
+        # Use bulk indexer for comprehensive content caching
+        from ..storage.bulk_indexer import BulkContentIndexer
+        
+        bulk_indexer = BulkContentIndexer(
             cache_root=settings.onenote_cache_full_path,
             content_fetcher=content_fetcher,
-            cache_manager=cache_manager,
-            default_strategy=SyncStrategy.NEWER_WINS
+            max_concurrent_pages=5
         )
 
         with Progress(
@@ -109,45 +110,42 @@ async def cmd_init_cache() -> None:
             transient=False,
         ) as progress:
             task = progress.add_task("Initializing cache...", total=None)
+            
+            progress.update(task, description=f"Caching content from {len(notebooks)} notebooks...")
+            
+            # Use bulk indexer for proper content caching
+            indexing_result = await bulk_indexer.index_all_content(
+                notebooks=None,  # Index all content
+                force_reindex=True
+            )
 
-            # Perform full scan and sync
-            changes = await sync_manager.detect_changes(user_id=user_id, force_full_scan=True)
+            progress.update(task, description="Cache initialization complete!")
 
-            if changes:
-                progress.update(task, description=f"Syncing {len(changes)} pages...")
-                operations = await sync_manager.plan_sync_operations(changes)
-                report = await sync_manager.execute_sync(operations)
-
-                progress.update(task, description="Cache initialization complete!")
-
-                # Show results
-                console.print("\n[green]🎉 Cache initialization completed successfully![/green]")
-                console.print(f"[dim]• Pages cached: {report.pages_created + report.pages_updated}[/dim]")
-
-                duration = report.get_duration()
-                if duration:
-                    duration_seconds = duration.total_seconds()
-                    console.print(f"[dim]• Duration: {duration_seconds:.1f} seconds[/dim]")
-                else:
-                    console.print("[dim]• Duration: Not available[/dim]")
-
-                if report.errors:
-                    console.print(f"[yellow]⚠️  {len(report.errors)} errors encountered[/yellow]")
-                    for error in report.errors[:3]:  # Show first 3 errors
-                        console.print(f"[dim]  • {error}[/dim]")
-                    if len(report.errors) > 3:
-                        console.print(f"[dim]  • ... and {len(report.errors) - 3} more[/dim]")
+            # Show results
+            console.print("\n[green]Cache initialization completed successfully![/green]")
+            console.print(f"[dim]• Pages cached: {indexing_result.total_pages}[/dim]")
+            console.print(f"[dim]• Successfully processed: {indexing_result.successful_pages}[/dim]")
+            
+            if indexing_result.failed_pages > 0:
+                console.print(f"[yellow]  {indexing_result.failed_pages} pages failed to process[/yellow]")
+                
+            duration = indexing_result.get_elapsed_time()
+            if duration:
+                duration_seconds = duration.total_seconds()
+                console.print(f"[dim]• Duration: {duration_seconds:.1f} seconds[/dim]")
             else:
-                console.print("\n[yellow]⚠️  No content found to cache.[/yellow]")
+                console.print("[dim]• Duration: Not available[/dim]")
+                if len(indexing_result.failed_page_ids) > 3:
+                    console.print(f"[dim]  • ... and {len(indexing_result.failed_page_ids) - 3} more failures[/dim]")
 
         # Show next steps
-        console.print("\n[bold green]✅ Your OneNote cache is ready![/bold green]")
+        console.print("\n[bold green]Your OneNote cache is ready![/bold green]")
         console.print("[dim]You can now use fast local search with:[/dim]")
         console.print("[cyan]  onenote-copilot[/cyan]")
 
     except Exception as e:
         logger.error(f"Cache initialization failed: {e}")
-        console.print(f"[red]❌ Cache initialization failed: {e}[/red]")
+        console.print(f"[red]Cache initialization failed: {e}[/red]")
         raise
 
 
@@ -156,7 +154,7 @@ async def cmd_cache_status() -> None:
     Show current cache status and statistics.
     """
     try:
-        console.print("[bold blue]📊 OneNote Cache Status[/bold blue]\n")
+        console.print("[bold blue]OneNote Cache Status[/bold blue]\n")
 
         # Initialize components
         settings = get_settings()
@@ -247,7 +245,7 @@ async def cmd_sync_cache() -> None:
     Manually sync latest changes from OneNote to local cache.
     """
     try:
-        console.print("[bold blue]🔄 Syncing OneNote Cache[/bold blue]")
+        console.print("[bold blue]Syncing OneNote Cache[/bold blue]")
         console.print("[dim]Checking for recent changes in your OneNote content...[/dim]\n")
 
         # Initialize components
@@ -267,7 +265,7 @@ async def cmd_sync_cache() -> None:
 
         # Check if cache exists
         if not cache_manager.cache_exists(user_id):
-            console.print("[yellow]⚠️  Cache not initialized.[/yellow]")
+            console.print("[yellow]  Cache not initialized.[/yellow]")
             console.print("[dim]Run 'onenote-copilot cache --init' to initialize cache first.[/dim]")
             return
 
@@ -334,7 +332,7 @@ async def cmd_sync_cache() -> None:
 
         # Show errors if any
         if report.errors:
-            console.print(f"\n[yellow]⚠️  {len(report.errors)} errors encountered:[/yellow]")
+            console.print(f"\n[yellow]  {len(report.errors)} errors encountered:[/yellow]")
             for error in report.errors[:3]:  # Show first 3 errors
                 console.print(f"[dim]  • {error}[/dim]")
             if len(report.errors) > 3:
@@ -351,7 +349,7 @@ async def cmd_rebuild_cache() -> None:
     Clear and rebuild the entire cache from scratch.
     """
     try:
-        console.print("[bold yellow]🔄 Rebuilding OneNote Cache[/bold yellow]")
+        console.print("[bold yellow]Rebuilding OneNote Cache[/bold yellow]")
         console.print("[dim]This will clear existing cache and rebuild from scratch...[/dim]\n")
 
         # Initialize components
@@ -372,22 +370,22 @@ async def cmd_rebuild_cache() -> None:
         # Check if cache exists and warn user
         cache_exists = cache_manager.cache_exists(user_id)
         if cache_exists:
-            console.print(f"[yellow]⚠️  Existing cache found for user: {user_id}[/yellow]")
+            console.print(f"[yellow]  Existing cache found for user: {user_id}[/yellow]")
             console.print("[dim]This will permanently delete all cached content.[/dim]")
 
             # Confirm with user
             from typer import confirm
             if not confirm("Do you want to continue?"):
-                console.print("[blue]ℹ️  Rebuild cancelled by user[/blue]")
+                console.print("[blue]  Rebuild cancelled by user[/blue]")
                 return
 
             # Delete existing cache
-            console.print("[yellow]🗑️  Clearing existing cache...[/yellow]")
+            console.print("[yellow]Clearing existing cache...[/yellow]")
             await cache_manager.delete_user_cache(user_id)
-            console.print("[green]✅ Existing cache cleared[/green]")
+            console.print("[green]Existing cache cleared[/green]")
 
         # Now initialize new cache (same as init command)
-        console.print("[yellow]🚀 Initializing new cache...[/yellow]")
+        console.print("[yellow]Initializing new cache...[/yellow]")
         await cmd_init_cache()
 
     except Exception as e:

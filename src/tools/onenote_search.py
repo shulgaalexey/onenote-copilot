@@ -382,6 +382,13 @@ class OneNoteSearchTool:
                 elif response.status_code == 404:
                     logger.warning(f"Page {page_id} not found")
                     return None, 1
+                elif response.status_code == 429:
+                    # Rate limit exceeded - wait and retry
+                    retry_after = int(response.headers.get("Retry-After", 60))
+                    logger.warning(f"Rate limit exceeded fetching page {page_id}, waiting {retry_after} seconds")
+                    await asyncio.sleep(retry_after)
+                    # Retry the request
+                    return await self._fetch_page_content(page_id, token)
                 else:
                     logger.warning(f"Failed to fetch content for page {page_id}: {response.status_code}")
                     return None, 1
@@ -455,9 +462,9 @@ class OneNoteSearchTool:
         """
         current_time = time.time()
 
-        # Simple delay between API calls
+        # Simple delay between API calls - increased for bulk operations
         time_since_last = current_time - self._last_request_time
-        min_delay = 0.1  # 100ms delay between API calls
+        min_delay = 0.5  # 500ms delay between API calls to avoid rate limits
 
         if time_since_last < min_delay:
             await asyncio.sleep(min_delay - time_since_last)
@@ -731,6 +738,7 @@ class OneNoteSearchTool:
 
             # Handle pagination
             while True:
+                await self._enforce_rate_limit()  # Add rate limiting
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     if next_url:
                         response = await client.get(next_url, headers=headers)
@@ -746,6 +754,13 @@ class OneNoteSearchTool:
                         next_url = data.get("@odata.nextLink")
                         if not next_url:
                             break
+                    elif response.status_code == 429:
+                        # Rate limit exceeded - wait and retry
+                        retry_after = int(response.headers.get("Retry-After", 60))
+                        logger.warning(f"Rate limit exceeded getting sections, waiting {retry_after} seconds")
+                        await asyncio.sleep(retry_after)
+                        # Don't increment next_url, retry the same request
+                        continue
                     else:
                         logger.error(f"Failed to get sections: HTTP {response.status_code}")
                         raise OneNoteSearchError(f"Failed to get sections: {response.status_code}")
@@ -793,6 +808,7 @@ class OneNoteSearchTool:
 
             # Handle pagination within the section
             while True:
+                await self._enforce_rate_limit()  # Add rate limiting
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     if next_url:
                         response = await client.get(next_url, headers=headers)
@@ -820,6 +836,13 @@ class OneNoteSearchTool:
                         next_url = data.get("@odata.nextLink")
                         if not next_url or (remaining_limit and len(section_pages) >= remaining_limit):
                             break
+                    elif response.status_code == 429:
+                        # Rate limit exceeded - wait and retry
+                        retry_after = int(response.headers.get("Retry-After", 60))
+                        logger.warning(f"Rate limit exceeded getting pages from section {section_id}, waiting {retry_after} seconds")
+                        await asyncio.sleep(retry_after)
+                        # Don't increment next_url, retry the same request
+                        continue
                     else:
                         logger.warning(f"Failed to get pages from section {section_id}: HTTP {response.status_code}")
                         break  # Continue with next section instead of failing completely
@@ -854,12 +877,26 @@ class OneNoteSearchTool:
 
             endpoint = f"{self.base_url}/me/onenote/notebooks"
 
+            await self._enforce_rate_limit()  # Add rate limiting
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.get(endpoint, headers=headers, params=params)
 
                 if response.status_code == 200:
                     data = response.json()
                     return data.get("value", [])
+                elif response.status_code == 429:
+                    # Rate limit exceeded - wait and retry once
+                    retry_after = int(response.headers.get("Retry-After", 60))
+                    logger.warning(f"Rate limit exceeded getting notebooks, waiting {retry_after} seconds")
+                    await asyncio.sleep(retry_after)
+                    
+                    # Retry once
+                    response = await client.get(endpoint, headers=headers, params=params)
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data.get("value", [])
+                    else:
+                        raise OneNoteSearchError(f"Failed to get notebooks after retry: {response.status_code}")
                 else:
                     raise OneNoteSearchError(f"Failed to get notebooks: {response.status_code}")
 

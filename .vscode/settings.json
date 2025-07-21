@@ -17,8 +17,8 @@
   "github.copilot.chat.codeGeneration.useInstructionFiles": true,
 
   // The setting was renamed in VS Code 1.99. The new key is chat.tools.autoApprove – everything else stayed the same.
-  "github.copilot.chat.agent.autoApproveTools": true,
-  "chat.tools.autoApprove": true,
+  "github.copilot.chat.agent.autoApproveTools": false,
+  "chat.tools.autoApprove": false,
 
   // ---- Python testing noise reduction ----
   "python.testing.pytestEnabled": true,

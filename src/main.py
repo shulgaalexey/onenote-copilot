@@ -142,17 +142,17 @@ async def authenticate_only() -> bool:
 
         if token:
             logger.info("✅ Authentication successful, token cached")
-            console.print("[green]✅ Authentication successful![/green]")
+            console.print("[green]Authentication successful![/green]")
             console.print(f"🎫 Token cached to: {settings.token_cache_file}")
             return True
         else:
             logger.warning("❌ Authentication failed - no token received")
-            console.print("[red]❌ Authentication failed.[/red]")
+            console.print("[red]Authentication failed.[/red]")
             return False
 
     except Exception as e:
         logger.error(f"❌ Authentication error: {e}", exc_info=True)
-        console.print(f"[red]❌ Authentication error: {e}[/red]")
+        console.print(f"[red]Authentication error: {e}[/red]")
         return False
 
 
@@ -185,11 +185,11 @@ def check_dependencies() -> bool:
             missing_deps.append(dep_name)
 
     if missing_deps:
-        console.print("[red]❌ Missing required dependencies:[/red]")
+        console.print("[red]Missing required dependencies:[/red]")
         for dep in missing_deps:
             console.print(f"   - {dep}")
         console.print()
-        console.print("[yellow]💡 Install dependencies with:[/yellow]")
+        console.print("[yellow]Install dependencies with:[/yellow]")
         console.print(f"   [cyan]pip install {' '.join(missing_deps)}[/cyan]")
         console.print("   [cyan]# OR[/cyan]")
         console.print("   [cyan]pip install -r requirements.txt[/cyan]")
@@ -250,7 +250,7 @@ def main(
         return
 
     # Early startup indicator
-    console.print("[dim]🚀 Starting OneNote Copilot...[/dim]")
+    console.print("[dim]Starting OneNote Copilot...[/dim]")
 
     # Setup comprehensive logging system early
     settings = get_settings()
@@ -292,7 +292,7 @@ def main(
 
         # Start the main application
         try:
-            console.print("[bold blue]🚀 Starting OneNote Copilot...[/bold blue]")
+            console.print("[bold blue]Starting OneNote Copilot...[/bold blue]")
 
             # Run the CLI interface
             logger.info("🎯 Starting main application interface...")
@@ -307,7 +307,7 @@ def main(
                 console.print_exception()
             else:
                 console.print(f"[red]X Failed to start OneNote Copilot: {e}[/red]")
-                console.print("[dim]💡 Use --debug flag for detailed error information[/dim]")
+                console.print("[dim]Use --debug flag for detailed error information[/dim]")
             raise typer.Exit(1)
 
 

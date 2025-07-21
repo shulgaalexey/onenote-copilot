@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Tuple, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ..models.cache import CachedPage, SyncResult
+from ..models.cache import CachedPage, CachedPageMetadata, SyncResult
 from ..models.onenote import OneNotePage, OneNoteSection, OneNoteNotebook
 from .onenote_fetcher import OneNoteContentFetcher
 from .asset_downloader import AssetDownloadManager
@@ -260,11 +260,11 @@ class BulkContentIndexer:
                 if not self.content_fetcher:
                     continue
                     
-                sections = await self.content_fetcher.get_all_sections(notebook_id=notebook.id)
+                sections = await self.content_fetcher.get_all_sections(notebook_id=notebook["id"])
                 self.progress.total_sections += len(sections)
                 
                 for section in sections:
-                    pages = await self.content_fetcher.get_pages_from_section(section.id)
+                    pages = await self.content_fetcher.get_pages_from_section(section["id"])
                     self.progress.total_pages += len(pages)
                     
         except Exception as e:
@@ -277,12 +277,12 @@ class BulkContentIndexer:
     async def _process_notebook(self, notebook: OneNoteNotebook, force_reindex: bool) -> None:
         """Process a single notebook with all sections and pages."""
         try:
-            logger.info(f"Processing notebook: {notebook.display_name}")
+            logger.info(f"Processing notebook: {notebook.get('displayName', notebook.get('id', 'Unknown'))}")
             
             if not self.content_fetcher:
                 return
                 
-            sections = await self.content_fetcher.get_all_sections(notebook_id=notebook.id)
+            sections = await self.content_fetcher.get_all_sections(notebook_id=notebook["id"])
             
             for section in sections:
                 if self.status != IndexingStatus.RUNNING:
@@ -292,7 +292,7 @@ class BulkContentIndexer:
                 self.progress.processed_sections += 1
                 
         except Exception as e:
-            error_msg = f"Failed to process notebook {notebook.display_name}: {e}"
+            error_msg = f"Failed to process notebook {notebook.get('displayName', notebook.get('id', 'Unknown'))}: {e}"
             logger.error(error_msg)
             self.progress.errors.append(error_msg)
 
@@ -302,12 +302,12 @@ class BulkContentIndexer:
                              force_reindex: bool) -> None:
         """Process a single section with all pages."""
         try:
-            logger.debug(f"Processing section: {section.display_name}")
+            logger.debug(f"Processing section: {section.get('displayName', section.get('id', 'Unknown'))}")
             
             if not self.content_fetcher:
                 return
                 
-            pages = await self.content_fetcher.get_pages_from_section(section.id)
+            pages = await self.content_fetcher.get_pages_from_section(section["id"])
             
             # Process pages with concurrency control
             semaphore_tasks = []
@@ -328,7 +328,7 @@ class BulkContentIndexer:
                 await asyncio.gather(*semaphore_tasks)
                 
         except Exception as e:
-            error_msg = f"Failed to process section {section.display_name}: {e}"
+            error_msg = f"Failed to process section {section.get('displayName', section.get('id', 'Unknown'))}: {e}"
             logger.error(error_msg)
             self.progress.errors.append(error_msg)
 
@@ -354,15 +354,15 @@ class BulkContentIndexer:
                 self.progress.processed_pages += 1
                 return
             
-            logger.debug(f"Processing page: {page.title}")
+            logger.debug(f"Processing page: {page.get('title', page.get('id', 'Unknown'))}")
             
             # Get page content if not available
-            if not page.html_content and self.content_fetcher:
-                page = await self.content_fetcher.get_page_content(page.id)
+            if not page.get('htmlContent') and self.content_fetcher:
+                page = await self.content_fetcher.get_page_content(page["id"])
             
             # Process assets if available
             assets = []
-            if self.asset_downloader and page.html_content:
+            if self.asset_downloader and page.get('htmlContent'):
                 download_result = await self.asset_downloader.download_assets(
                     [page], progress_callback=None
                 )
@@ -370,30 +370,44 @@ class BulkContentIndexer:
             
             # Convert to markdown if available
             markdown_content = ""
-            if self.markdown_converter and page.html_content:
+            if self.markdown_converter and page.get('htmlContent'):
                 conversion_result = self.markdown_converter.convert_to_markdown(
-                    page.html_content, assets, [], page.title
+                    page.get('htmlContent'), assets, [], page.get('title', 'Untitled')
                 )
                 if conversion_result.success:
                     markdown_content = conversion_result.markdown_content
             
+            # Create cached page metadata first
+            cached_page_metadata = CachedPageMetadata(
+                id=page.get("id"),
+                title=page.get("title", "Untitled"),
+                created_date_time=page.get("createdDateTime") or datetime.utcnow(),
+                last_modified_date_time=page.get("lastModifiedDateTime") or datetime.utcnow(),
+                parent_section={
+                    "id": section["id"],
+                    "displayName": section.get("displayName", "Unknown Section")
+                },
+                parent_notebook={
+                    "id": notebook["id"],
+                    "displayName": notebook.get("displayName", "Unknown Notebook")
+                },
+                content_url=page.get("contentUrl") or "",
+                local_content_path=f"pages/{page.get('id')}.md",
+                local_html_path=f"pages/{page.get('id')}.html",
+                attachments=assets,
+                cached_at=datetime.utcnow(),
+                last_synced=datetime.utcnow(),
+                content_downloaded=bool(page.get("htmlContent")),
+                markdown_converted=bool(markdown_content),
+                assets_downloaded=bool(assets),
+            )
+            
             # Create cached page
             cached_page = CachedPage(
-                id=page.id,
-                title=page.title,
-                html_content=page.html_content,
+                metadata=cached_page_metadata,
+                content=page.get("htmlContent", ""),
                 markdown_content=markdown_content,
-                created_date_time=page.created_date_time,
-                last_modified_date_time=page.last_modified_date_time,
-                notebook_id=notebook.id,
-                notebook_name=notebook.display_name,
-                section_id=section.id,
-                section_name=section.display_name,
-                content_url=page.content_url,
-                assets=assets,
-                links=[],  # Links would be resolved by link resolver
-                cache_created_at=datetime.utcnow(),
-                cache_updated_at=datetime.utcnow()
+                text_content=None  # Would be extracted by text processor
             )
             
             # Index in local search if available
@@ -404,10 +418,10 @@ class BulkContentIndexer:
             await self._save_cached_page(cached_page)
             
             self.progress.successful_pages += 1
-            self.progress.processed_content_size += len(page.html_content or "")
+            self.progress.processed_content_size += len(page.get('htmlContent') or "")
             
         except Exception as e:
-            error_msg = f"Failed to process page {page.title}: {e}"
+            error_msg = f"Failed to process page {page.get('title', page.get('id', 'Unknown'))}: {e}"
             logger.error(error_msg)
             self.progress.errors.append(error_msg)
             self.progress.failed_pages += 1

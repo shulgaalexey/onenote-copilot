@@ -50,7 +50,7 @@ class DownloadStatus(str, Enum):
 
 class AssetInfo(BaseModel):
     """Information about an asset (image, file) to be downloaded."""
-    
+
     type: str = Field(..., description="Asset type (image, file)")
     original_url: str = Field(..., description="Original OneNote resource URL")
     local_path: str = Field(..., description="Local file path for storage")
@@ -62,7 +62,7 @@ class AssetInfo(BaseModel):
 
 class InternalLink(BaseModel):
     """Information about internal OneNote page links."""
-    
+
     target_page_id: str = Field(..., description="ID of the linked page")
     target_page_title: Optional[str] = Field(None, description="Title of linked page")
     link_text: str = Field(..., description="Display text of the link")
@@ -72,7 +72,7 @@ class InternalLink(BaseModel):
 
 class ExternalLink(BaseModel):
     """Information about external links."""
-    
+
     url: str = Field(..., description="External URL")
     link_text: str = Field(..., description="Display text of the link")
     title: Optional[str] = Field(None, description="Link title attribute")
@@ -80,7 +80,7 @@ class ExternalLink(BaseModel):
 
 class LinkInfo(BaseModel):
     """Information about a link found in content."""
-    
+
     original_url: str = Field(..., description="Original URL from the content")
     resolved_path: str = Field(default="", description="Resolved local path")
     link_text: str = Field(..., description="Display text of the link")
@@ -91,65 +91,65 @@ class LinkInfo(BaseModel):
 
 class MarkdownConversionResult(BaseModel):
     """Result of HTML to Markdown conversion."""
-    
+
     success: bool = Field(default=False, description="Whether conversion succeeded")
     original_html: str = Field(default="", description="Original HTML content")
     markdown_content: str = Field(default="", description="Converted markdown content")
-    
+
     # Conversion statistics
     elements_converted: int = Field(default=0, description="Number of HTML elements converted")
     assets_linked: int = Field(default=0, description="Number of assets linked")
     internal_links_resolved: int = Field(default=0, description="Number of internal links resolved")
     external_links_preserved: int = Field(default=0, description="Number of external links preserved")
-    
+
     # Issues and warnings
     warnings: List[str] = Field(default_factory=list, description="Conversion warnings")
     error: Optional[str] = Field(None, description="Error message if conversion failed")
-    
+
     # Timing
     conversion_time_seconds: float = Field(default=0.0, description="Time taken for conversion")
 
 
 class LinkResolutionResult(BaseModel):
     """Result of link resolution operations."""
-    
+
     success: bool = Field(default=False, description="Whether resolution succeeded")
     total_links: int = Field(default=0, description="Total number of links to resolve")
     resolved_count: int = Field(default=0, description="Number of successfully resolved links")
     failed_count: int = Field(default=0, description="Number of failed resolutions")
-    
+
     # Results
     resolved_links: List[LinkInfo] = Field(default_factory=list, description="Successfully resolved links")
     failed_links: List[LinkInfo] = Field(default_factory=list, description="Failed link resolutions")
-    
+
     # Error information
     error: Optional[str] = Field(None, description="Error message if batch resolution failed")
 
 
 class AssetDownloadResult(BaseModel):
     """Result of asset download operations."""
-    
+
     status: DownloadStatus = Field(default=DownloadStatus.PENDING, description="Overall download status")
     total_assets: int = Field(default=0, description="Total number of assets to download")
     successful_count: int = Field(default=0, description="Number of successful downloads")
-    failed_count: int = Field(default=0, description="Number of failed downloads") 
+    failed_count: int = Field(default=0, description="Number of failed downloads")
     total_bytes: int = Field(default=0, description="Total bytes downloaded")
-    
+
     # Detailed results
     successful_downloads: List[Dict[str, Any]] = Field(default_factory=list, description="List of successful downloads")
     failed_downloads: List[Dict[str, Any]] = Field(default_factory=list, description="List of failed downloads with error info")
-    
+
     # Timing
     started_at: Optional[datetime] = Field(None, description="Download start time")
     completed_at: Optional[datetime] = Field(None, description="Download completion time")
-    
+
     @property
     def duration_seconds(self) -> float:
         """Get download duration in seconds."""
         if self.completed_at and self.started_at:
             return (self.completed_at - self.started_at).total_seconds()
         return 0.0
-        
+
     @property
     def success_rate(self) -> float:
         """Get success rate as percentage."""
@@ -157,34 +157,39 @@ class AssetDownloadResult(BaseModel):
             return 0.0
         return (self.successful_count / self.total_assets) * 100.0
 
+    @property
+    def success(self) -> bool:
+        """Check if all downloads were successful."""
+        return self.status == DownloadStatus.COMPLETED and self.failed_count == 0
+
 
 class CachedPageMetadata(BaseModel):
     """Extended metadata for cached OneNote pages."""
-    
+
     # Core page information (from OneNotePage)
     id: str = Field(..., description="OneNote page ID")
     title: str = Field(..., description="Page title")
     created_date_time: datetime = Field(..., description="Page creation date")
     last_modified_date_time: datetime = Field(..., description="Page last modified date")
-    
+
     # Parent structure
     parent_section: Dict[str, Any] = Field(..., description="Parent section info")
     parent_notebook: Dict[str, Any] = Field(..., description="Parent notebook info")
-    
+
     # Cache-specific metadata
     content_url: str = Field(..., description="Original OneNote content URL")
     local_content_path: str = Field(..., description="Local markdown file path")
     local_html_path: str = Field(..., description="Local HTML file path")
-    
+
     # Assets and links
     attachments: List[AssetInfo] = Field(default_factory=list)
     internal_links: List[InternalLink] = Field(default_factory=list)
     external_links: List[ExternalLink] = Field(default_factory=list)
-    
+
     # Cache timestamps
     cached_at: datetime = Field(default_factory=datetime.utcnow)
     last_synced: datetime = Field(default_factory=datetime.utcnow)
-    
+
     # Status flags
     content_downloaded: bool = Field(default=False)
     markdown_converted: bool = Field(default=False)
@@ -201,27 +206,27 @@ class CachedPageMetadata(BaseModel):
 
 class CachedPage(BaseModel):
     """A cached OneNote page with content and metadata."""
-    
+
     metadata: CachedPageMetadata = Field(..., description="Page metadata")
     content: Optional[str] = Field(None, description="Original HTML content")
     markdown_content: Optional[str] = Field(None, description="Converted markdown content")
     text_content: Optional[str] = Field(None, description="Extracted text content")
-    
+
     @property
     def id(self) -> str:
         """Get page ID."""
         return self.metadata.id
-    
+
     @property
     def title(self) -> str:
         """Get page title."""
         return self.metadata.title
-    
+
     @property
     def last_modified(self) -> datetime:
         """Get last modified date."""
         return self.metadata.last_modified_date_time
-    
+
     def to_onenote_page(self) -> OneNotePage:
         """Convert to OneNotePage model for compatibility."""
         return OneNotePage(
@@ -240,13 +245,13 @@ class CachedPage(BaseModel):
 
 class NotebookMetadata(BaseModel):
     """Metadata for a cached notebook."""
-    
+
     id: str = Field(..., description="Notebook ID")
     display_name: str = Field(..., description="Notebook display name")
     created_date_time: datetime = Field(..., description="Creation date")
     last_modified_date_time: datetime = Field(..., description="Last modified date")
     is_default: Optional[bool] = Field(None, description="Is default notebook")
-    
+
     # Cache-specific
     cached_at: datetime = Field(default_factory=datetime.utcnow)
     section_count: int = Field(default=0, description="Number of sections")
@@ -255,13 +260,13 @@ class NotebookMetadata(BaseModel):
 
 class SectionMetadata(BaseModel):
     """Metadata for a cached section."""
-    
+
     id: str = Field(..., description="Section ID")
     display_name: str = Field(..., description="Section display name")
     created_date_time: datetime = Field(..., description="Creation date")
     last_modified_date_time: datetime = Field(..., description="Last modified date")
     parent_notebook_id: str = Field(..., description="Parent notebook ID")
-    
+
     # Cache-specific
     cached_at: datetime = Field(default_factory=datetime.utcnow)
     page_count: int = Field(default=0, description="Number of pages")
@@ -269,7 +274,7 @@ class SectionMetadata(BaseModel):
 
 class SyncStatistics(BaseModel):
     """Statistics from a sync operation."""
-    
+
     pages_added: int = Field(default=0)
     pages_updated: int = Field(default=0)
     pages_deleted: int = Field(default=0)
@@ -283,24 +288,24 @@ class SyncStatistics(BaseModel):
 
 class CacheMetadata(BaseModel):
     """Metadata for the entire cache for a user."""
-    
+
     cache_version: str = Field(default="1.0.0", description="Cache format version")
     user_id: str = Field(..., description="User identifier")
-    
+
     # Sync timestamps
     cache_created: datetime = Field(default_factory=datetime.utcnow)
     last_full_sync: Optional[datetime] = Field(None, description="Last full sync timestamp")
     last_incremental_sync: Optional[datetime] = Field(None, description="Last incremental sync")
-    
+
     # Content counts
     total_notebooks: int = Field(default=0)
     total_sections: int = Field(default=0)
     total_pages: int = Field(default=0)
     total_size_mb: float = Field(default=0.0)
-    
+
     # Sync statistics from last sync
     sync_statistics: SyncStatistics = Field(default_factory=SyncStatistics)
-    
+
     # Cache configuration
     cache_root_path: str = Field(..., description="Root path of the cache")
     sync_enabled: bool = Field(default=True)
@@ -316,7 +321,7 @@ class CacheMetadata(BaseModel):
 
 class ContentChange(BaseModel):
     """Represents a detected change in OneNote content."""
-    
+
     page_id: str = Field(..., description="ID of changed page")
     change_type: ContentChangeType = Field(..., description="Type of change")
     remote_modified: datetime = Field(..., description="Remote modification timestamp")
@@ -328,7 +333,7 @@ class ContentChange(BaseModel):
 
 class SyncConflict(BaseModel):
     """Represents a conflict between local and remote content."""
-    
+
     page_id: str = Field(..., description="ID of conflicted page")
     conflict_type: str = Field(..., description="Type of conflict")
     local_modified: datetime = Field(..., description="Local modification timestamp")
@@ -338,7 +343,7 @@ class SyncConflict(BaseModel):
 
 class ConflictResolution(BaseModel):
     """Resolution strategy for a sync conflict."""
-    
+
     conflict: SyncConflict = Field(..., description="The conflict being resolved")
     resolution_strategy: str = Field(..., description="Resolution strategy chosen")
     resolved_at: datetime = Field(default_factory=datetime.utcnow)
@@ -347,31 +352,31 @@ class ConflictResolution(BaseModel):
 
 class SyncResult(BaseModel):
     """Result of a synchronization operation."""
-    
+
     sync_type: SyncType = Field(..., description="Type of sync performed")
     status: SyncStatus = Field(..., description="Sync completion status")
     started_at: datetime = Field(..., description="Sync start time")
     completed_at: Optional[datetime] = Field(None, description="Sync completion time")
-    
+
     # Changes detected and applied
     changes_detected: List[ContentChange] = Field(default_factory=list)
     conflicts_found: List[SyncConflict] = Field(default_factory=list)
     conflicts_resolved: List[ConflictResolution] = Field(default_factory=list)
-    
+
     # Statistics
     statistics: SyncStatistics = Field(default_factory=SyncStatistics)
-    
+
     # Error information
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
-    
+
     @property
     def duration_seconds(self) -> float:
         """Get sync duration in seconds."""
         if self.completed_at and self.started_at:
             return (self.completed_at - self.started_at).total_seconds()
         return 0.0
-    
+
     @property
     def success(self) -> bool:
         """Check if sync was successful."""
@@ -380,7 +385,7 @@ class SyncResult(BaseModel):
 
 class DownloadResult(BaseModel):
     """Result of downloading an asset or content."""
-    
+
     success: bool = Field(..., description="Whether download succeeded")
     local_path: Optional[str] = Field(None, description="Local file path if successful")
     size_bytes: Optional[int] = Field(None, description="Downloaded file size")
@@ -391,7 +396,7 @@ class DownloadResult(BaseModel):
 
 class ConversionResult(BaseModel):
     """Result of HTML to Markdown conversion."""
-    
+
     success: bool = Field(..., description="Whether conversion succeeded")
     markdown_content: Optional[str] = Field(None, description="Converted markdown content")
     assets_processed: List[AssetInfo] = Field(default_factory=list)
@@ -402,7 +407,7 @@ class ConversionResult(BaseModel):
 
 class CacheSyncResult(BaseModel):
     """High-level result of a cache synchronization operation."""
-    
+
     user_id: str = Field(..., description="User ID that was synced")
     sync_result: SyncResult = Field(..., description="Detailed sync result")
     cache_updated: bool = Field(..., description="Whether cache was updated")
@@ -411,23 +416,23 @@ class CacheSyncResult(BaseModel):
 
 class CacheStatistics(BaseModel):
     """Statistics about the local cache."""
-    
+
     user_id: str = Field(..., description="User ID")
     total_notebooks: int = Field(default=0)
     total_sections: int = Field(default=0)
     total_pages: int = Field(default=0)
     total_images: int = Field(default=0)
     total_files: int = Field(default=0)
-    
+
     # Storage statistics
     total_size_bytes: int = Field(default=0)
     markdown_size_bytes: int = Field(default=0)
     assets_size_bytes: int = Field(default=0)
-    
+
     # Sync statistics
     last_sync: Optional[datetime] = Field(None)
     sync_success_rate: float = Field(default=0.0, ge=0.0, le=1.0)
-    
+
     # Performance statistics
     average_search_time_ms: float = Field(default=0.0)
     cache_hit_rate: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -442,7 +447,7 @@ class CacheStatistics(BaseModel):
 
 class CleanupResult(BaseModel):
     """Result of cache cleanup operations."""
-    
+
     orphaned_assets_removed: int = Field(default=0)
     deleted_pages_cleaned: int = Field(default=0)
     space_freed_bytes: int = Field(default=0)
@@ -458,7 +463,7 @@ class CleanupResult(BaseModel):
 # Search-related models for local cache search
 class CacheSearchResult(BaseModel):
     """Search result from local cache."""
-    
+
     pages: List[CachedPage] = Field(default_factory=list)
     query: str = Field(..., description="Original search query")
     total_count: int = Field(default=0)
@@ -473,7 +478,7 @@ class CacheSearchResult(BaseModel):
 
 class SearchMatch(BaseModel):
     """Individual search match with score."""
-    
+
     page: CachedPage = Field(..., description="Matched page")
     score: float = Field(..., description="Match score", ge=0.0, le=1.0)
     match_type: str = Field(..., description="Type of match (title, content, etc.)")
@@ -482,7 +487,7 @@ class SearchMatch(BaseModel):
 
 class PageMatch(BaseModel):
     """Page match for title or metadata searches."""
-    
+
     page: CachedPage = Field(..., description="Matched page")
     match_score: float = Field(..., description="Match confidence", ge=0.0, le=1.0)
     match_reason: str = Field(..., description="Why this page matched")
@@ -490,7 +495,7 @@ class PageMatch(BaseModel):
 
 class RelatedPage(BaseModel):
     """Page related through links or content similarity."""
-    
+
     page: CachedPage = Field(..., description="Related page")
     relation_type: str = Field(..., description="Type of relationship")
     relation_score: float = Field(..., description="Strength of relationship", ge=0.0, le=1.0)

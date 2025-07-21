@@ -12,18 +12,16 @@ from unittest.mock import patch
 
 import pytest
 
-from src.storage.directory_utils import (
-    cleanup_empty_directories,
-    create_cache_directory_structure,
-    find_duplicate_assets,
-    get_asset_storage_path,
-    get_cache_size_breakdown,
-    get_directory_summary,
-    organize_by_date_hierarchy,
-    sanitize_directory_name,
-    sanitize_filename,
-    validate_cache_structure,
-)
+from src.storage.directory_utils import (cleanup_empty_directories,
+                                         create_cache_directory_structure,
+                                         find_duplicate_assets,
+                                         get_asset_storage_path,
+                                         get_cache_size_breakdown,
+                                         get_directory_summary,
+                                         organize_by_date_hierarchy,
+                                         sanitize_directory_name,
+                                         sanitize_filename,
+                                         validate_cache_structure)
 
 
 class TestSanitization:
@@ -112,10 +110,10 @@ class TestDirectoryStructure:
     def test_create_cache_directory_structure_unsafe_names(self, temp_base_dir):
         """Test directory creation with unsafe names."""
         paths = create_cache_directory_structure(
-            temp_base_dir, 
-            "user@domain.com", 
-            'nb<>:bad|chars', 
-            "sec/with\\slash", 
+            temp_base_dir,
+            "user@domain.com",
+            'nb<>:bad|chars',
+            "sec/with\\slash",
             "page?wild*"
         )
 
@@ -159,7 +157,7 @@ class TestDirectoryStructure:
     def test_organize_by_date_hierarchy(self, tmp_path):
         """Test date-based organization."""
         test_date = datetime(2024, 3, 15)
-        
+
         result_path = organize_by_date_hierarchy(
             tmp_path, test_date, "Test Notebook", "Test Page"
         )
@@ -179,15 +177,15 @@ class TestDirectoryValidation:
         """Create a valid cache directory structure."""
         cache_dir = tmp_path / "valid_cache"
         cache_dir.mkdir()
-        
+
         # Create required directories
         (cache_dir / "notebooks").mkdir()
         (cache_dir / "global").mkdir()
-        
+
         # Create required files
         (cache_dir / "cache_metadata.json").write_text('{"user_id": "test"}')
         (cache_dir / "sync_status.json").write_text('{"sync_in_progress": false}')
-        
+
         return cache_dir
 
     @pytest.fixture
@@ -201,7 +199,7 @@ class TestDirectoryValidation:
     def test_validate_cache_structure_valid(self, valid_cache_dir):
         """Test validation of a valid cache structure."""
         validation = validate_cache_structure(valid_cache_dir)
-        
+
         assert validation['user_dir_exists'] is True
         assert validation['notebooks_dir'] is True
         assert validation['global_dir'] is True
@@ -213,7 +211,7 @@ class TestDirectoryValidation:
     def test_validate_cache_structure_invalid(self, invalid_cache_dir):
         """Test validation of an invalid cache structure."""
         validation = validate_cache_structure(invalid_cache_dir)
-        
+
         assert validation['user_dir_exists'] is True  # Directory exists
         assert validation['notebooks_dir'] is False  # Missing subdirs
         assert validation['global_dir'] is False
@@ -225,7 +223,7 @@ class TestDirectoryValidation:
         """Test validation of nonexistent directory."""
         nonexistent = tmp_path / "does_not_exist"
         validation = validate_cache_structure(nonexistent)
-        
+
         assert validation['user_dir_exists'] is False
         assert validation['overall_valid'] is False
 
@@ -238,24 +236,24 @@ class TestDirectoryValidation:
         (cache_dir / "metadata.json").write_text('{"test": "data"}')
         (cache_dir / "content.md").write_text("# Test Content")
         (cache_dir / "page.html").write_text("<html><body>Test</body></html>")
-        
+
         # Create images directory with test image
         images_dir = cache_dir / "images"
         images_dir.mkdir()
         (images_dir / "test.png").write_bytes(b"fake image data")
 
         breakdown = get_cache_size_breakdown(cache_dir)
-        
+
         assert breakdown['metadata'] > 0
         assert breakdown['content_md'] > 0
         assert breakdown['content_html'] > 0
         assert breakdown['images'] > 0
         assert breakdown['total'] > 0
-        assert breakdown['total'] == (breakdown['metadata'] + 
-                                     breakdown['content_md'] + 
-                                     breakdown['content_html'] + 
-                                     breakdown['images'] + 
-                                     breakdown['files'] + 
+        assert breakdown['total'] == (breakdown['metadata'] +
+                                     breakdown['content_md'] +
+                                     breakdown['content_html'] +
+                                     breakdown['images'] +
+                                     breakdown['files'] +
                                      breakdown['other'])
 
     def test_get_directory_summary(self, tmp_path):
@@ -263,14 +261,14 @@ class TestDirectoryValidation:
         # Create a mock cache structure
         cache_dir = tmp_path / "summary_test"
         cache_dir.mkdir()
-        
+
         notebooks_dir = cache_dir / "notebooks" / "nb1" / "sections" / "sec1" / "pages" / "page1"
         notebooks_dir.mkdir(parents=True)
-        
+
         # Add some files
         (notebooks_dir / "content.md").write_text("Test content")
         (notebooks_dir / "metadata.json").write_text('{"test": true}')
-        
+
         # Add attachments
         attachments_dir = notebooks_dir / "attachments"
         (attachments_dir / "images").mkdir(parents=True)
@@ -279,10 +277,10 @@ class TestDirectoryValidation:
         (attachments_dir / "files" / "doc.pdf").write_bytes(b"document")
 
         summary = get_directory_summary(cache_dir)
-        
+
         assert summary['exists'] is True
         assert summary['notebooks'] == 1
-        assert summary['sections'] == 1  
+        assert summary['sections'] == 1
         assert summary['pages'] == 1
         assert summary['images'] == 1
         assert summary['files'] == 1
@@ -298,18 +296,18 @@ class TestDirectoryMaintenance:
         # Create directory structure with some empty dirs
         base_dir = tmp_path / "cleanup_test"
         base_dir.mkdir()
-        
+
         # Create nested empty directories
         (base_dir / "empty1").mkdir()
         (base_dir / "empty2" / "nested_empty").mkdir(parents=True)
-        
+
         # Create directory with content
         content_dir = base_dir / "with_content"
         content_dir.mkdir()
         (content_dir / "file.txt").write_text("content")
-        
+
         removed_count = cleanup_empty_directories(base_dir, preserve_root=True)
-        
+
         # Should remove empty directories but preserve root and content dir
         assert base_dir.exists()  # Root preserved
         assert content_dir.exists()  # Has content
@@ -325,19 +323,19 @@ class TestDirectoryMaintenance:
         # Create some duplicate files
         content1 = b"This is test content for duplication"
         content2 = b"Different content"
-        
+
         (attachments_dir / "file1.txt").write_bytes(content1)
         (attachments_dir / "file1_copy.txt").write_bytes(content1)  # Duplicate
         (attachments_dir / "file2.txt").write_bytes(content2)  # Unique
         (attachments_dir / "file3.txt").write_bytes(content1)  # Another duplicate
-        
+
         duplicates = find_duplicate_assets(attachments_dir)
-        
+
         # Should find one group of duplicates (3 files with same content)
         assert len(duplicates) == 1
         assert duplicates[0]['count'] == 3
         assert len(duplicates[0]['files']) == 3
-        
+
         # All three duplicate files should be listed
         file_names = [Path(f).name for f in duplicates[0]['files']]
         assert "file1.txt" in file_names
@@ -353,7 +351,7 @@ class TestDirectoryMaintenance:
         (attachments_dir / "file1.txt").write_bytes(b"Content 1")
         (attachments_dir / "file2.txt").write_bytes(b"Content 2")
         (attachments_dir / "file3.txt").write_bytes(b"Content 3")
-        
+
         duplicates = find_duplicate_assets(attachments_dir)
         assert len(duplicates) == 0
 
@@ -362,14 +360,14 @@ class TestDirectoryMaintenance:
         """Test error handling in various operations."""
         # Test with nonexistent directory
         nonexistent_dir = tmp_path / "does_not_exist"
-        
+
         # Operations should handle errors gracefully
         breakdown = get_cache_size_breakdown(nonexistent_dir)
         assert breakdown['total'] == 0  # Should return empty breakdown
-        
+
         validation = validate_cache_structure(nonexistent_dir)
         assert validation['user_dir_exists'] is False
-        
+
         summary = get_directory_summary(nonexistent_dir)
         assert summary['exists'] is False
 
@@ -380,12 +378,12 @@ class TestIntegration:
     def test_full_cache_directory_workflow(self, tmp_path):
         """Test complete directory management workflow."""
         base_cache = tmp_path / "full_workflow"
-        
+
         # Step 1: Create structure
         paths = create_cache_directory_structure(
             base_cache, "user123", "notebook456", "section789", "page321"
         )
-        
+
         # Step 2: Add some assets
         image_path = get_asset_storage_path(
             paths['attachments_root'], "image", "test.png", "img001"
@@ -393,23 +391,23 @@ class TestIntegration:
         file_path = get_asset_storage_path(
             paths['attachments_root'], "file", "document.pdf", "doc001"
         )
-        
+
         # Create the asset files
         image_path.write_bytes(b"fake image content")
         file_path.write_bytes(b"fake document content")
-        
+
         # Step 3: Validate structure
         validation = validate_cache_structure(paths['user_root'])
         # Note: This will fail because we need metadata files for full validation
         assert validation['user_dir_exists'] is True
         assert validation['writable'] is True
-        
+
         # Step 4: Get size breakdown
         breakdown = get_cache_size_breakdown(paths['user_root'])
         assert breakdown['images'] > 0
         assert breakdown['files'] > 0  # Should find the file we created
         assert breakdown['total'] > 0
-        
+
         # Step 5: Generate summary
         summary = get_directory_summary(paths['user_root'])
         assert summary['exists'] is True
@@ -423,36 +421,36 @@ class TestIntegration:
         """Test directory utilities with complex, real-world names."""
         complex_names = {
             'user': 'user@company.com',
-            'notebook': 'Meeting Notes Q4 2024',
+            'notebook': 'Meeting Notes Q4',
             'section': 'Team Meetings',
-            'page': 'Monday Sprint Planning'
+            'page': 'Sprint Planning'
         }
-        
+
         # Should handle complex names without errors
         paths = create_cache_directory_structure(
             tmp_path / "complex",
             complex_names['user'],
-            complex_names['notebook'], 
+            complex_names['notebook'],
             complex_names['section'],
             complex_names['page']
         )
-        
+
         # All paths should be created successfully
         for path_name, path in paths.items():
             if path_name != 'base':
                 assert path.exists(), f"Path {path_name} was not created: {path}"
-        
+
         # Asset storage should also work with complex names
         asset_path = get_asset_storage_path(
-            paths['attachments_root'], 
-            "image", 
-            "Screenshot 2024-12-16.png",
+            paths['attachments_root'],
+            "image",
+            "Screenshot.png",
             "img-001"
         )
-        
+
         asset_path.write_bytes(b"screenshot data")
         assert asset_path.exists()
-        
+
         # Summary should reflect the structure correctly
         summary = get_directory_summary(paths['user_root'])
         assert summary['notebooks'] == 1

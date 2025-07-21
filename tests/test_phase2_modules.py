@@ -8,38 +8,34 @@ and link resolver functionality.
 import asyncio
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
 from typing import Dict, List
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models.cache import (
-    AssetInfo,
-    CachedPage,
-    CachedPageMetadata,
-    ConversionResult,
-    DownloadResult,
-    InternalLink,
-    ExternalLink,
-    LinkResolutionResult,
-    SyncResult,
-)
-from src.models.onenote import OneNotePage, OneNoteSection, OneNoteNotebook
-from src.storage.onenote_fetcher import OneNoteContentFetcher
+from src.models.cache import (AssetDownloadResult, AssetInfo, CachedPage,
+                              CachedPageMetadata, ConversionResult,
+                              DownloadStatus, ExternalLink, InternalLink,
+                              LinkInfo, LinkResolutionResult,
+                              MarkdownConversionResult, SyncResult)
+from src.models.onenote import OneNoteNotebook, OneNotePage, OneNoteSection
 from src.storage.asset_downloader import AssetDownloadManager
-from src.storage.markdown_converter import MarkdownConverter
 from src.storage.link_resolver import LinkResolver
+from src.storage.markdown_converter import MarkdownConverter
+from src.storage.onenote_fetcher import OneNoteContentFetcher
 
 
 class TestOneNoteContentFetcher:
     """Test OneNote content fetcher functionality."""
 
     @pytest.fixture
-    def mock_auth_client(self):
-        """Create mock authentication client."""
-        client = AsyncMock()
-        client.get_access_token.return_value = "mock_access_token"
-        return client
+    def mock_onenote_search(self):
+        """Create mock OneNote search tool."""
+        search_tool = AsyncMock()
+        search_tool.get_notebooks.return_value = []
+        search_tool.get_sections.return_value = []
+        search_tool.get_pages.return_value = []
+        return search_tool
 
     @pytest.fixture
     def cache_manager(self):
@@ -49,117 +45,104 @@ class TestOneNoteContentFetcher:
         return manager
 
     @pytest.fixture
-    async def content_fetcher(self, mock_auth_client, cache_manager):
+    async def content_fetcher(self, cache_manager, mock_onenote_search):
         """Create content fetcher instance."""
-        async with OneNoteContentFetcher(mock_auth_client, cache_manager) as fetcher:
+        async with OneNoteContentFetcher(cache_manager, mock_onenote_search) as fetcher:
             yield fetcher
 
     @pytest.mark.asyncio
     async def test_fetch_notebooks_success(self, content_fetcher):
         """Test successful notebook fetching."""
-        # Mock HTTP response
-        mock_response = {
-            "value": [
-                {
-                    "id": "notebook1",
-                    "displayName": "Test Notebook",
-                    "links": {"oneNoteWebUrl": {"href": "https://test.com/notebook1"}}
-                }
-            ]
-        }
-        
-        with patch('aiohttp.ClientSession.get') as mock_get:
-            mock_resp = AsyncMock()
-            mock_resp.status = 200
-            mock_resp.json.return_value = mock_response
-            mock_get.return_value.__aenter__.return_value = mock_resp
-            
-            notebooks = await content_fetcher.fetch_notebooks()
-            
-            assert len(notebooks) == 1
-            assert notebooks[0].id == "notebook1"
-            assert notebooks[0].name == "Test Notebook"
+        # Mock OneNoteSearchTool response (it now delegates to OneNoteSearchTool)
+        expected_notebooks = [
+            {
+                "id": "notebook1",
+                "displayName": "Test Notebook",
+                "links": {"oneNoteWebUrl": {"href": "https://test.com/notebook1"}}
+            }
+        ]
+
+        # Configure the mock OneNoteSearchTool to return expected data
+        content_fetcher.onenote_search.get_notebooks.return_value = expected_notebooks
+
+        notebooks = await content_fetcher.fetch_notebooks()
+
+        assert len(notebooks) == 1
+        assert notebooks[0].id == "notebook1"
+        assert notebooks[0].name == "Test Notebook"
 
     @pytest.mark.asyncio
     async def test_fetch_notebooks_api_error(self, content_fetcher):
         """Test notebook fetching with API error."""
-        with patch('aiohttp.ClientSession.get') as mock_get:
-            mock_resp = AsyncMock()
-            mock_resp.status = 403
-            mock_resp.reason = "Forbidden"
-            mock_get.return_value.__aenter__.return_value = mock_resp
-            
-            with pytest.raises(Exception) as exc_info:
-                await content_fetcher.fetch_notebooks()
-            
-            assert "403" in str(exc_info.value)
+        # Configure the mock OneNoteSearchTool to raise an exception
+        content_fetcher.onenote_search.get_notebooks.side_effect = Exception("403 Forbidden")
+
+        with pytest.raises(Exception) as exc_info:
+            await content_fetcher.fetch_notebooks()
+
+        assert "403" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_fetch_sections_success(self, content_fetcher):
         """Test successful section fetching."""
         notebook = OneNoteNotebook(
-            id="notebook1", 
-            name="Test Notebook", 
+            id="notebook1",
+            name="Test Notebook",
             web_url="https://test.com"
         )
-        
-        mock_response = {
-            "value": [
-                {
-                    "id": "section1",
-                    "displayName": "Test Section",
-                    "links": {"oneNoteWebUrl": {"href": "https://test.com/section1"}}
-                }
-            ]
-        }
-        
-        with patch('aiohttp.ClientSession.get') as mock_get:
-            mock_resp = AsyncMock()
-            mock_resp.status = 200
-            mock_resp.json.return_value = mock_response
-            mock_get.return_value.__aenter__.return_value = mock_resp
-            
-            sections = await content_fetcher.fetch_sections_for_notebook(notebook)
-            
-            assert len(sections) == 1
-            assert sections[0].id == "section1"
-            assert sections[0].name == "Test Section"
-            assert sections[0].notebook_name == "Test Notebook"
+
+        # Mock OneNoteSearchTool response (it now delegates to OneNoteSearchTool)
+        expected_sections = [
+            {
+                "id": "section1",
+                "displayName": "Test Section",
+                "links": {"oneNoteWebUrl": {"href": "https://test.com/section1"}},
+                "parentNotebook": {"id": "notebook1"}  # This is needed for filtering
+            }
+        ]
+
+        # Mock the token retrieval and the sections call
+        content_fetcher.onenote_search.authenticator.get_valid_token.return_value = "mock_token"
+        content_fetcher.onenote_search._get_all_sections.return_value = expected_sections
+
+        sections = await content_fetcher.fetch_sections_for_notebook(notebook)
+
+        assert len(sections) == 1
+        assert sections[0].id == "section1"
+        assert sections[0].name == "Test Section"
+        assert sections[0].notebook_name == "Test Notebook"
 
     @pytest.mark.asyncio
     async def test_fetch_pages_success(self, content_fetcher):
         """Test successful page fetching."""
         section = OneNoteSection(
-            id="section1", 
-            name="Test Section", 
+            id="section1",
+            name="Test Section",
             notebook_name="Test Notebook",
             web_url="https://test.com"
         )
-        
-        mock_response = {
-            "value": [
-                {
-                    "id": "page1",
-                    "title": "Test Page",
-                    "links": {"oneNoteWebUrl": {"href": "https://test.com/page1"}},
-                    "lastModifiedDateTime": "2024-01-01T00:00:00Z"
-                }
-            ]
-        }
-        
-        with patch('aiohttp.ClientSession.get') as mock_get:
-            mock_resp = AsyncMock()
-            mock_resp.status = 200
-            mock_resp.json.return_value = mock_response
-            mock_get.return_value.__aenter__.return_value = mock_resp
-            
-            pages = await content_fetcher.fetch_pages_for_section(section)
-            
-            assert len(pages) == 1
-            assert pages[0].id == "page1"
-            assert pages[0].title == "Test Page"
-            assert pages[0].notebook_name == "Test Notebook"
-            assert pages[0].section_name == "Test Section"
+
+        # Mock OneNoteSearchTool response (it now delegates to OneNoteSearchTool)
+        expected_pages = [
+            {
+                "id": "page1",
+                "title": "Test Page",
+                "links": {"oneNoteWebUrl": {"href": "https://test.com/page1"}},
+                "lastModifiedDateTime": "2024-01-01T00:00:00Z"
+            }
+        ]
+
+        # Mock the token retrieval and the pages call
+        content_fetcher.onenote_search.authenticator.get_valid_token.return_value = "mock_token"
+        content_fetcher.onenote_search._get_pages_from_section.return_value = expected_pages
+
+        pages = await content_fetcher.fetch_pages_for_section(section)
+
+        assert len(pages) == 1
+        assert pages[0].id == "page1"
+        assert pages[0].title == "Test Page"
+        assert pages[0].notebook_name == "Test Notebook"
+        assert pages[0].section_name == "Test Section"
 
     @pytest.mark.asyncio
     async def test_fetch_page_content_success(self, content_fetcher):
@@ -172,17 +155,30 @@ class TestOneNoteContentFetcher:
             web_url="https://test.com",
             last_modified=None
         )
-        
+
         mock_content = "<html><body><p>Test content</p></body></html>"
-        
+        mock_metadata = {
+            "id": "page1",
+            "title": "Test Page",
+            "createdDateTime": "2024-01-01T00:00:00Z",
+            "lastModifiedDateTime": "2024-01-01T00:00:00Z"
+        }
+
         with patch('aiohttp.ClientSession.get') as mock_get:
-            mock_resp = AsyncMock()
-            mock_resp.status = 200
-            mock_resp.text.return_value = mock_content
-            mock_get.return_value.__aenter__.return_value = mock_resp
-            
+            # Create two different mock responses
+            mock_resp_metadata = AsyncMock()
+            mock_resp_metadata.status = 200
+            mock_resp_metadata.json = AsyncMock(return_value=mock_metadata)
+
+            mock_resp_content = AsyncMock()
+            mock_resp_content.status = 200
+            mock_resp_content.text = AsyncMock(return_value=mock_content)
+
+            # First call returns metadata, second call returns content
+            mock_get.return_value.__aenter__.side_effect = [mock_resp_metadata, mock_resp_content]
+
             content = await content_fetcher.fetch_page_content(page)
-            
+
             assert content == mock_content
 
 
@@ -225,7 +221,10 @@ class TestAssetDownloadManager:
     async def test_download_assets_success(self, asset_manager, sample_assets, temp_dir):
         """Test successful asset downloading."""
         mock_content = b"fake image data"
-        
+
+        async def mock_iter_chunked(chunk_size):
+            yield mock_content
+
         with patch('aiohttp.ClientSession.get') as mock_get:
             mock_resp = AsyncMock()
             mock_resp.status = 200
@@ -233,12 +232,11 @@ class TestAssetDownloadManager:
                 'content-type': 'image/png',
                 'content-length': str(len(mock_content))
             }
-            mock_resp.content.iter_chunked.return_value = AsyncMock()
-            mock_resp.content.iter_chunked.return_value.__aiter__.return_value = [mock_content]
+            mock_resp.content.iter_chunked = mock_iter_chunked
             mock_get.return_value.__aenter__.return_value = mock_resp
-            
+
             result = await asset_manager.download_assets(sample_assets, temp_dir)
-            
+
             assert result.success is True
             assert result.successful_count == 2
             assert result.failed_count == 0
@@ -251,9 +249,9 @@ class TestAssetDownloadManager:
             mock_resp.status = 404
             mock_resp.reason = "Not Found"
             mock_get.return_value.__aenter__.return_value = mock_resp
-            
+
             result = await asset_manager.download_assets(sample_assets, temp_dir)
-            
+
             assert result.success is False
             assert result.successful_count == 0
             assert result.failed_count == 2
@@ -263,7 +261,10 @@ class TestAssetDownloadManager:
         """Test downloading a single asset."""
         asset = sample_assets[0]
         mock_content = b"fake image data"
-        
+
+        async def mock_iter_chunked(chunk_size):
+            yield mock_content
+
         with patch('aiohttp.ClientSession.get') as mock_get:
             mock_resp = AsyncMock()
             mock_resp.status = 200
@@ -271,12 +272,11 @@ class TestAssetDownloadManager:
                 'content-type': 'image/png',
                 'content-length': str(len(mock_content))
             }
-            mock_resp.content.iter_chunked.return_value = AsyncMock()
-            mock_resp.content.iter_chunked.return_value.__aiter__.return_value = [mock_content]
+            mock_resp.content.iter_chunked = mock_iter_chunked
             mock_get.return_value.__aenter__.return_value = mock_resp
-            
+
             result = await asset_manager.download_single_asset(asset, temp_dir)
-            
+
             assert result['success'] is True
             assert 'local_path' in result
 
@@ -292,9 +292,9 @@ class TestAssetDownloadManager:
                 size_bytes=1024 * 1024  # 1MB
             )
         ]
-        
+
         estimated_time = asset_manager.estimate_download_time(assets)
-        
+
         # Should return a reasonable estimate
         assert estimated_time > 0
         assert estimated_time < 60  # Should be less than 1 minute for 1MB
@@ -360,7 +360,7 @@ class TestMarkdownConverter:
             internal_links=sample_links,
             page_title="Test Page"
         )
-        
+
         assert result.success is True
         assert "# Test Page" in result.markdown_content
         assert "**test**" in result.markdown_content
@@ -373,7 +373,7 @@ class TestMarkdownConverter:
         """Test heading conversion."""
         html = "<h1>Heading 1</h1><h2>Heading 2</h2><h3>Heading 3</h3>"
         result = converter.convert_to_markdown(html, [], [])
-        
+
         assert "# Heading 1" in result.markdown_content
         assert "## Heading 2" in result.markdown_content
         assert "### Heading 3" in result.markdown_content
@@ -391,7 +391,7 @@ class TestMarkdownConverter:
         </ol>
         """
         result = converter.convert_to_markdown(html, [], [])
-        
+
         assert "- Unordered item 1" in result.markdown_content
         assert "- Unordered item 2" in result.markdown_content
         assert "1. Ordered item 1" in result.markdown_content
@@ -412,7 +412,7 @@ class TestMarkdownConverter:
         </table>
         """
         result = converter.convert_to_markdown(html, [], [])
-        
+
         assert "| **Header 1** | **Header 2** |" in result.markdown_content
         assert "| --- | --- |" in result.markdown_content
         assert "| Cell 1 | Cell 2 |" in result.markdown_content
@@ -427,7 +427,7 @@ class TestMarkdownConverter:
         </code></pre>
         """
         result = converter.convert_to_markdown(html, [], [])
-        
+
         assert "`code`" in result.markdown_content
         assert "```" in result.markdown_content
         assert "def hello():" in result.markdown_content
@@ -436,7 +436,7 @@ class TestMarkdownConverter:
         """Test conversion time estimation."""
         html = "<p>Simple content</p>" * 100
         estimated_time = converter.estimate_conversion_time(html)
-        
+
         assert estimated_time > 0
         assert estimated_time < 10  # Should be reasonable
 
@@ -444,7 +444,7 @@ class TestMarkdownConverter:
         """Test markdown cleaning."""
         dirty_content = "**  **\n\n\n\nTest content\n\n\n*  *"
         cleaned = converter._clean_markdown(dirty_content)
-        
+
         assert "**  **" not in cleaned
         assert "*  *" not in cleaned
         assert "\n\n\n" not in cleaned
@@ -478,7 +478,7 @@ class TestLinkResolver:
                 last_modified=None
             ),
             OneNotePage(
-                id="page2", 
+                id="page2",
                 title="Test Page 2",
                 notebook_name="Test Notebook",
                 section_name="Test Section",
@@ -514,7 +514,7 @@ class TestLinkResolver:
                 original_url="https://test.onenote.com/section1#section-id=section1",
                 resolved_path="",
                 link_text="Link to Section",
-                link_type="unknown", 
+                link_type="unknown",
                 resolution_status="pending"
             )
         ]
@@ -522,7 +522,7 @@ class TestLinkResolver:
     def test_resolve_links_success(self, link_resolver, sample_links, sample_pages, sample_sections):
         """Test successful link resolution."""
         result = link_resolver.resolve_links(sample_links, sample_pages, sample_sections)
-        
+
         assert result.success is True
         assert result.total_links == 2
         assert result.resolved_count >= 0  # May resolve based on pattern matching
@@ -533,7 +533,7 @@ class TestLinkResolver:
         assert link_resolver.is_internal_onenote_link("https://test.onenote.com/page1") is True
         assert link_resolver.is_internal_onenote_link("https://test.sharepoint.com/notebook.one#page") is True
         assert link_resolver.is_internal_onenote_link("onenote:page1") is True
-        
+
         # Test non-OneNote URLs
         assert link_resolver.is_internal_onenote_link("https://google.com") is False
         assert link_resolver.is_internal_onenote_link("mailto:test@test.com") is False
@@ -543,7 +543,7 @@ class TestLinkResolver:
         url = "https://test.onenote.com/page#page-id=abc123"
         page_id = link_resolver._extract_page_id(url)
         assert page_id == "abc123"
-        
+
         # Test URL without page ID
         url_no_id = "https://test.onenote.com/page"
         page_id_none = link_resolver._extract_page_id(url_no_id)
@@ -554,7 +554,7 @@ class TestLinkResolver:
         url = "https://test.onenote.com/section#section-id=def456"
         section_id = link_resolver._extract_section_id(url)
         assert section_id == "def456"
-        
+
         # Test URL without section ID
         url_no_id = "https://test.onenote.com/section"
         section_id_none = link_resolver._extract_section_id(url_no_id)
@@ -571,9 +571,9 @@ class TestLinkResolver:
         </body>
         </html>
         '''
-        
+
         links = link_resolver.extract_links_from_html(html)
-        
+
         # Should find OneNote links but not external ones
         onenote_urls = [link.original_url for link in links]
         assert "https://test.onenote.com/page1" in onenote_urls
@@ -587,7 +587,7 @@ class TestLinkResolver:
         content_dir.mkdir(parents=True, exist_ok=True)
         test_file = content_dir / "test.md"
         test_file.write_text("# Test")
-        
+
         # Create links to validate
         links = [
             LinkInfo(
@@ -605,9 +605,9 @@ class TestLinkResolver:
                 resolution_status="resolved"
             )
         ]
-        
+
         valid_links, invalid_links = link_resolver.validate_resolved_links(links)
-        
+
         assert len(valid_links) == 1
         assert len(invalid_links) == 1
         assert valid_links[0].resolved_path == "test.md"
@@ -619,7 +619,7 @@ class TestLinkResolver:
         updated = link_resolver.update_link_in_markdown(
             markdown, "old-link.md", "new-link.md"
         )
-        
+
         assert "[this page](new-link.md)" in updated
         assert "old-link.md" not in updated
 
@@ -628,7 +628,7 @@ class TestLinkResolver:
         # Add something to cache
         link_resolver.resolution_cache["test"] = "value"
         assert len(link_resolver.resolution_cache) == 1
-        
+
         # Clear cache
         link_resolver.clear_resolution_cache()
         assert len(link_resolver.resolution_cache) == 0
@@ -650,21 +650,21 @@ class TestPhase2Integration:
         """Test complete workflow from fetching to markdown conversion."""
         # This would be a comprehensive integration test
         # For now, just ensure modules can be imported and instantiated together
-        
+
         # Mock auth client
         auth_client = AsyncMock()
         auth_client.get_access_token.return_value = "mock_token"
-        
+
         # Mock cache manager
         cache_manager = MagicMock()
         cache_manager.get_cache_info.return_value = MagicMock(last_sync_time=None)
-        
+
         # Test that all modules can be created
         async with AssetDownloadManager() as asset_manager:
             async with OneNoteContentFetcher(auth_client, cache_manager) as content_fetcher:
                 converter = MarkdownConverter()
                 resolver = LinkResolver(temp_cache_root)
-                
+
                 # Basic functionality test
                 assert asset_manager.get_download_stats()['total_downloads'] == 0
                 assert converter.get_conversion_stats()['elements_converted'] == 0
@@ -679,7 +679,7 @@ class TestPhase2Integration:
             local_path="",
             filename="image.png"
         )
-        
+
         link = LinkInfo(
             original_url="https://test.com/page",
             resolved_path="",
@@ -687,7 +687,7 @@ class TestPhase2Integration:
             link_type="page",
             resolution_status="pending"
         )
-        
+
         page = OneNotePage(
             id="page1",
             title="Test Page",
@@ -696,7 +696,7 @@ class TestPhase2Integration:
             web_url="https://test.com",
             last_modified=None
         )
-        
+
         # Ensure models are properly structured
         assert hasattr(asset, 'original_url')
         assert hasattr(link, 'resolved_path')
@@ -707,11 +707,11 @@ class TestPhase2Integration:
         # Test that all result classes have success/error fields
         download_result = AssetDownloadResult()
         assert hasattr(download_result, 'status')
-        
+
         conversion_result = MarkdownConversionResult()
         assert hasattr(conversion_result, 'success')
         assert hasattr(conversion_result, 'error')
-        
+
         resolution_result = LinkResolutionResult()
         assert hasattr(resolution_result, 'success')
         assert hasattr(resolution_result, 'error')

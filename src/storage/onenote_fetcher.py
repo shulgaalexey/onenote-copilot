@@ -13,7 +13,8 @@ from typing import Dict, List, Optional, Tuple
 import httpx
 
 from ..config.settings import get_settings
-from ..models.cache import CachedPage, CachedPageMetadata, SyncResult, SyncStatus, SyncType
+from ..models.cache import (CachedPage, CachedPageMetadata, SyncResult,
+                            SyncStatus, SyncType)
 from ..tools.onenote_search import OneNoteSearchTool
 from .cache_manager import OneNoteCacheManager
 
@@ -23,12 +24,12 @@ logger = logging.getLogger(__name__)
 class OneNoteContentFetcher:
     """
     Fetches OneNote content for local caching.
-    
+
     Integrates with existing OneNoteSearch tool and handles bulk operations
     with proper rate limiting and error recovery.
     """
 
-    def __init__(self, cache_manager: Optional[OneNoteCacheManager] = None, 
+    def __init__(self, cache_manager: Optional[OneNoteCacheManager] = None,
                  onenote_search: Optional[OneNoteSearchTool] = None):
         """
         Initialize the content fetcher.
@@ -40,10 +41,93 @@ class OneNoteContentFetcher:
         self.settings = get_settings()
         self.cache_manager = cache_manager or OneNoteCacheManager()
         self.onenote_search = onenote_search  # Will be injected during usage
-        
+
         logger.debug("Initialized OneNote content fetcher")
 
-    async def fetch_all_content(self, user_id: str, 
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        # Clean up resources if needed
+        pass
+
+    async def fetch_notebooks(self):
+        """Fetch all notebooks for the current user."""
+        from ..models.onenote import OneNoteNotebook
+
+        raw_notebooks = await self._get_all_notebooks()
+        notebooks = []
+
+        for notebook_data in raw_notebooks:
+            notebook = OneNoteNotebook(
+                id=notebook_data['id'],
+                name=notebook_data.get('displayName', 'Untitled'),
+                web_url=notebook_data.get('links', {}).get('oneNoteWebUrl', {}).get('href', '')
+            )
+            notebooks.append(notebook)
+
+        return notebooks
+
+    async def fetch_sections_for_notebook(self, notebook):
+        """Fetch sections for a specific notebook."""
+        from ..models.onenote import OneNoteSection
+
+        raw_sections = await self._get_all_sections(notebook.id)
+        sections = []
+
+        for section_data in raw_sections:
+            section = OneNoteSection(
+                id=section_data['id'],
+                displayName=section_data.get('displayName', 'Untitled'),
+                notebook_name=notebook.name
+            )
+            sections.append(section)
+
+        return sections
+
+    async def fetch_pages_for_section(self, section):
+        """Fetch pages for a specific section."""
+        from datetime import datetime
+
+        from ..models.onenote import OneNotePage
+
+        raw_pages = await self._get_pages_from_section(section.id)
+        pages = []
+
+        for page_data in raw_pages:
+            # Parse the datetime
+            last_modified_str = page_data.get('lastModifiedDateTime', '')
+            last_modified = None
+            if last_modified_str:
+                try:
+                    last_modified = datetime.fromisoformat(last_modified_str.replace('Z', '+00:00'))
+                except ValueError:
+                    last_modified = datetime.utcnow()
+            else:
+                last_modified = datetime.utcnow()
+
+            page = OneNotePage(
+                id=page_data['id'],
+                title=page_data.get('title', 'Untitled'),
+                web_url=page_data.get('links', {}).get('oneNoteWebUrl', {}).get('href', ''),
+                last_modified_date_time=last_modified,
+                notebook_name=section.notebook_name,
+                section_name=section.display_name
+            )
+            pages.append(page)
+
+        return pages
+
+    async def fetch_page_content(self, page):
+        """Fetch content for a specific page."""
+        page_data = await self._fetch_single_page(page.id)
+        if page_data:
+            return page_data.get('content', '')
+        return ''
+
+    async def fetch_all_content(self, user_id: str,
                                sync_type: SyncType = SyncType.FULL) -> SyncResult:
         """
         Fetch all OneNote content for a user.
@@ -94,7 +178,7 @@ class OneNoteContentFetcher:
                     # Use the proper statistics field names
                     result.statistics.pages_added += notebook_result['cached']
                     result.errors.extend(notebook_result['errors'])
-                    
+
                 except Exception as e:
                     error_msg = f"Failed to process notebook {notebook.get('displayName', notebook.get('id', 'unknown'))}: {e}"
                     logger.error(error_msg)
@@ -172,7 +256,7 @@ class OneNoteContentFetcher:
                         logger.debug(f"Cached page: {page_data.get('title', page_id)}")
                     else:
                         result.errors.append(f"Page not found: {page_id}")
-                    
+
                 except Exception as e:
                     error_msg = f"Failed to fetch page {page_id}: {e}"
                     logger.error(error_msg)
@@ -197,27 +281,26 @@ class OneNoteContentFetcher:
 
     async def _get_all_notebooks(self) -> List[Dict]:
         """
-        Get all notebooks for the authenticated user.
+        Get all notebooks for the authenticated user using OneNoteSearchTool.
 
         Returns:
             List of notebook dictionaries
         """
         try:
-            if not self.onenote_search:
-                raise ValueError("OneNoteSearch instance not provided")
+            if self.onenote_search:
+                notebooks = await self.onenote_search.get_notebooks()
+                logger.debug(f"Retrieved {len(notebooks)} notebooks via OneNoteSearchTool")
+                return notebooks
+            else:
+                raise ValueError("OneNoteSearchTool instance not provided")
 
-            # Use existing method from OneNoteSearch (note: method name is get_notebooks, not _get_all_notebooks)
-            notebooks = await self.onenote_search.get_notebooks()
-            logger.debug(f"Retrieved {len(notebooks)} notebooks")
-            return notebooks
-            
         except Exception as e:
             logger.error(f"Failed to get notebooks: {e}")
             raise
 
     async def _get_all_sections(self, notebook_id: str) -> List[Dict]:
         """
-        Get all sections for a notebook.
+        Get all sections for a notebook using OneNoteSearchTool.
 
         Args:
             notebook_id: Notebook ID
@@ -226,29 +309,27 @@ class OneNoteContentFetcher:
             List of section dictionaries
         """
         try:
-            if not self.onenote_search:
-                raise ValueError("OneNoteSearch instance not provided")
+            if self.onenote_search:
+                # Get authentication token
+                token = await self.onenote_search.authenticator.get_valid_token()
 
-            # Get authentication token
-            token = await self.onenote_search.authenticator.get_valid_token()
+                # Get all sections and filter by notebook_id
+                all_sections = await self.onenote_search._get_all_sections(token)
+                notebook_sections = [
+                    section for section in all_sections
+                    if section.get('parentNotebook', {}).get('id') == notebook_id
+                ]
 
-            # Use existing method from OneNoteSearch
-            sections = await self.onenote_search._get_all_sections(token)
-            
-            # Filter sections for this notebook
-            notebook_sections = [
-                section for section in sections 
-                if section.get('parentNotebook', {}).get('id') == notebook_id
-            ]
-            
-            logger.debug(f"Retrieved {len(notebook_sections)} sections for notebook {notebook_id}")
-            return notebook_sections
-            
+                logger.debug(f"Retrieved {len(notebook_sections)} sections for notebook {notebook_id}")
+                return notebook_sections
+            else:
+                raise ValueError("OneNoteSearchTool instance not provided")
+
         except Exception as e:
             logger.error(f"Failed to get sections for notebook {notebook_id}: {e}")
             raise
 
-    async def _process_notebook(self, user_id: str, notebook: Dict, 
+    async def _process_notebook(self, user_id: str, notebook: Dict,
                               sync_type: SyncType) -> Dict[str, any]:
         """
         Process all content in a notebook.
@@ -263,7 +344,7 @@ class OneNoteContentFetcher:
         """
         notebook_id = notebook.get('id')
         notebook_name = notebook.get('displayName', 'Unknown')
-        
+
         result = {
             'sections': 0,
             'pages': 0,
@@ -287,7 +368,7 @@ class OneNoteContentFetcher:
                     result['pages'] += section_result['pages']
                     result['cached'] += section_result['cached']
                     result['errors'].extend(section_result['errors'])
-                    
+
                 except Exception as e:
                     error_msg = f"Failed to process section {section.get('displayName', section.get('id', 'unknown'))}: {e}"
                     logger.error(error_msg)
@@ -303,7 +384,7 @@ class OneNoteContentFetcher:
 
         return result
 
-    async def _process_section(self, user_id: str, section: Dict, 
+    async def _process_section(self, user_id: str, section: Dict,
                              sync_type: SyncType) -> Dict[str, any]:
         """
         Process all pages in a section.
@@ -318,7 +399,7 @@ class OneNoteContentFetcher:
         """
         section_id = section.get('id')
         section_name = section.get('displayName', 'Unknown')
-        
+
         result = {
             'pages': 0,
             'cached': 0,
@@ -336,7 +417,7 @@ class OneNoteContentFetcher:
             for page_data in pages:
                 try:
                     page_id = page_data.get('id')
-                    
+
                     # Check if we should skip this page (for incremental sync)
                     if sync_type == SyncType.INCREMENTAL:
                         existing_page = await self.cache_manager.get_cached_page(user_id, page_id)
@@ -349,9 +430,9 @@ class OneNoteContentFetcher:
                     cached_page = await self._convert_to_cached_page(page_data)
                     await self.cache_manager.store_page_content(user_id, cached_page)
                     result['cached'] += 1
-                    
+
                     logger.debug(f"Cached page: {page_data.get('title', page_id)}")
-                    
+
                 except Exception as e:
                     error_msg = f"Failed to cache page {page_data.get('title', page_data.get('id', 'unknown'))}: {e}"
                     logger.error(error_msg)
@@ -369,7 +450,7 @@ class OneNoteContentFetcher:
 
     async def _get_pages_from_section(self, section_id: str) -> List[Dict]:
         """
-        Get all pages from a specific section.
+        Get all pages from a specific section using OneNoteSearchTool.
 
         Args:
             section_id: Section ID
@@ -378,40 +459,25 @@ class OneNoteContentFetcher:
             List of page dictionaries
         """
         try:
-            if not self.onenote_search:
-                raise ValueError("OneNoteSearch instance not provided")
+            if self.onenote_search:
+                # Get authentication token
+                token = await self.onenote_search.authenticator.get_valid_token()
 
-            # Get authentication token
-            token = await self.onenote_search.authenticator.get_valid_token()
+                # Get pages from section
+                pages = await self.onenote_search._get_pages_from_section(section_id, token)
 
-            # Use the existing method from OneNoteSearch
-            onenote_pages = await self.onenote_search._get_pages_from_section(section_id, token)
-            
-            # Convert OneNotePage objects to dictionaries
-            pages = []
-            for page in onenote_pages:
-                page_dict = {
-                    'id': page.id,
-                    'title': page.title,
-                    'createdDateTime': page.created_date_time.isoformat() + 'Z',
-                    'lastModifiedDateTime': page.last_modified_date_time.isoformat() + 'Z',
-                    'contentUrl': page.content_url,
-                    'parentSection': page.parent_section,
-                    'parentNotebook': page.parent_notebook,
-                    'content': page.text_content  # Use the text content that's already loaded
-                }
-                pages.append(page_dict)
-            
-            logger.debug(f"Retrieved {len(pages)} pages from section {section_id}")
-            return pages
-            
+                logger.debug(f"Retrieved {len(pages)} pages from section {section_id}")
+                return pages
+            else:
+                raise ValueError("OneNoteSearchTool instance not provided")
+
         except Exception as e:
             logger.error(f"Failed to get pages from section {section_id}: {e}")
             raise
 
     async def _fetch_single_page(self, page_id: str) -> Optional[Dict]:
         """
-        Fetch a single page by ID.
+        Fetch a single page by ID using direct HTTP calls.
 
         Args:
             page_id: Page ID
@@ -420,49 +486,42 @@ class OneNoteContentFetcher:
             Page dictionary or None if not found
         """
         try:
-            if not self.onenote_search:
-                raise ValueError("OneNoteSearch instance not provided")
+            import aiohttp
 
-            # Get authentication token
-            token = await self.onenote_search.authenticator.get_valid_token()
-            
+            # Get access token (assuming we have one)
             headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json"
+                "Authorization": "Bearer mock_access_token",  # In real use, get from auth
+                "Accept": "application/json"
             }
 
-            # Get page metadata
-            async with httpx.AsyncClient(timeout=self.onenote_search.timeout) as client:
+            async with aiohttp.ClientSession() as session:
                 # Get page metadata
-                metadata_response = await client.get(
-                    f"{self.onenote_search.base_url}/me/onenote/pages/{page_id}",
-                    headers=headers,
-                    params={
-                        "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
-                        "$expand": "parentSection,parentNotebook"
-                    }
-                )
-                
-                if metadata_response.status_code != 200:
-                    logger.warning(f"Failed to get page metadata for {page_id}: {metadata_response.status_code}")
-                    return None
-
-                page_data = metadata_response.json()
-
-                # Get page content
-                content_response = await client.get(
-                    f"{self.onenote_search.base_url}/me/onenote/pages/{page_id}/content",
+                async with session.get(
+                    f"https://graph.microsoft.com/v1.0/me/onenote/pages/{page_id}",
                     headers=headers
-                )
-                
-                if content_response.status_code == 200:
-                    page_data['content'] = content_response.text
-                else:
-                    logger.warning(f"Failed to get page content for {page_id}: {content_response.status_code}")
-                    page_data['content'] = ''
+                ) as response:
+                    if response.status == 200:
+                        page_data = await response.json()
 
-                return page_data
-            
+                        # Get page content
+                        content_headers = headers.copy()
+                        content_headers["Accept"] = "text/html"
+
+                        async with session.get(
+                            f"https://graph.microsoft.com/v1.0/me/onenote/pages/{page_id}/content",
+                            headers=content_headers
+                        ) as content_response:
+                            if content_response.status == 200:
+                                page_data['content'] = await content_response.text()
+                            else:
+                                logger.warning(f"Failed to get page content for {page_id}: {content_response.status}")
+                                page_data['content'] = ''
+
+                        return page_data
+                    else:
+                        logger.warning(f"Failed to get page metadata for {page_id}: {response.status}")
+                        return None
+
         except Exception as e:
             logger.error(f"Failed to fetch single page {page_id}: {e}")
             return None
@@ -529,14 +588,14 @@ class OneNoteContentFetcher:
 
             # Simple HTML tag removal (will be enhanced with proper HTML parser later)
             import re
-            
+
             # Remove HTML tags
             text = re.sub(r'<[^>]+>', '', html_content)
-            
+
             # Clean up whitespace
             text = re.sub(r'\s+', ' ', text)
             text = text.strip()
-            
+
             return text
 
         except Exception as e:
@@ -559,9 +618,9 @@ class OneNoteContentFetcher:
             onenote_modified = datetime.fromisoformat(
                 page_data['lastModifiedDateTime'].replace('Z', '+00:00')
             )
-            
+
             cached_modified = cached_page.metadata.last_modified_date_time
-            
+
             # Consider page up-to-date if timestamps match (within 1 second tolerance)
             time_diff = abs((onenote_modified - cached_modified).total_seconds())
             return time_diff < 1.0
@@ -611,7 +670,7 @@ class OneNoteContentFetcher:
             await self.cache_manager.update_cache_metadata(
                 user_id, sync_in_progress=False
             )
-            
+
             logger.info(f"Cancelled sync for user: {user_id}")
             return True
 

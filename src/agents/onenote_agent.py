@@ -23,6 +23,8 @@ from ..config.settings import get_settings
 from ..models.onenote import OneNotePage, SearchResult
 from ..models.responses import (AgentState, OneNoteSearchResponse,
                                 StreamingChunk)
+from ..storage.cache_manager import OneNoteCacheManager
+from ..storage.local_search import LocalOneNoteSearch, LocalSearchError
 from ..tools.onenote_content import (OneNoteContentProcessor,
                                      create_ai_context_from_pages)
 from ..tools.onenote_search import OneNoteSearchError, OneNoteSearchTool
@@ -58,6 +60,11 @@ class OneNoteAgent:
         self.authenticator = MicrosoftAuthenticator(self.settings)
         self.search_tool = OneNoteSearchTool(self.authenticator, self.settings)
         self.content_processor = OneNoteContentProcessor()
+
+        # Initialize cache and local search (lazy loaded)
+        self._cache_manager = None
+        self._local_search = None
+        self._local_search_available = False
 
         # Initialize semantic search components
         self._semantic_search_engine = None
@@ -109,6 +116,51 @@ class OneNoteAgent:
                 logger.warning(f"Failed to initialize semantic search: {e}")
                 self._semantic_search_enabled = False
         return self._semantic_search_engine
+
+    @property
+    def cache_manager(self):
+        """Lazy initialization of cache manager."""
+        if self._cache_manager is None:
+            self._cache_manager = OneNoteCacheManager(self.settings)
+            logger.debug("Cache manager initialized")
+        return self._cache_manager
+
+    @property
+    def local_search(self):
+        """Lazy initialization of local search engine."""
+        if self._local_search is None and not self._local_search_available:
+            try:
+                self._local_search = LocalOneNoteSearch(self.settings, self.cache_manager)
+                # Don't initialize yet - will be done in initialize() method
+                logger.debug("Local search engine created")
+            except Exception as e:
+                logger.warning(f"Failed to create local search engine: {e}")
+        return self._local_search
+
+    async def _check_local_search_available(self) -> bool:
+        """Check if local search is available and has content."""
+        try:
+            if not self.local_search:
+                return False
+
+            # Check if cache directory exists and has content
+            cache_root = self.cache_manager.cache_root
+            if not cache_root.exists():
+                logger.debug("Cache directory doesn't exist - local search unavailable")
+                return False
+
+            # Check if there are any cached pages
+            cached_pages = await self.cache_manager.get_all_cached_pages()
+            if not cached_pages:
+                logger.debug("No cached pages found - local search unavailable")
+                return False
+
+            logger.info(f"Local search available with {len(cached_pages)} cached pages")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Error checking local search availability: {e}")
+            return False
 
     def _create_agent_graph(self) -> Any:
         """Create the LangGraph workflow for the agent."""
@@ -719,7 +771,7 @@ class OneNoteAgent:
 
     async def search_pages(self, query: str, max_results: int = 10) -> OneNoteSearchResponse:
         """
-        Direct search method for OneNote pages.
+        Direct search method for OneNote pages with local search support.
 
         Args:
             query: Search query string
@@ -728,6 +780,103 @@ class OneNoteAgent:
         Returns:
             OneNoteSearchResponse with results
         """
+        start_time = time.time()
+        search_method = "unknown"
+
+        try:
+            # Try local search first if available
+            if self._local_search_available and self.local_search:
+                try:
+                    local_results = await self.local_search.search(query, limit=max_results)
+                    if local_results:
+                        search_method = "local_cache"
+                        logger.info(f"Local search found {len(local_results)} results in {time.time() - start_time:.2f}s")
+                        return await self._create_response_from_local_results(local_results, query, start_time, search_method)
+                    else:
+                        logger.info("Local search returned no results, falling back to API")
+
+                except LocalSearchError as e:
+                    logger.warning(f"Local search error, falling back to API: {e}")
+                except Exception as e:
+                    logger.warning(f"Unexpected local search error, falling back to API: {e}")
+
+            # Fallback to API search
+            search_method = "api"
+            logger.info(f"Using API search for query: '{query}'")
+            return await self._api_search_pages(query, max_results, start_time, search_method)
+
+        except Exception as e:
+            logger.error(f"Search error: {e}")
+            return OneNoteSearchResponse(
+                answer=f"I encountered an error while searching: {e}",
+                sources=[],
+                confidence=0.0,
+                search_query_used=query,
+                metadata={"error": str(e), "search_method": search_method}
+            )
+
+    async def _create_response_from_local_results(
+        self,
+        local_results: list,
+        query: str,
+        start_time: float,
+        search_method: str
+    ) -> OneNoteSearchResponse:
+        """Create OneNoteSearchResponse from local search results."""
+        try:
+            # Convert local search results to pages
+            pages = [result.page for result in local_results]
+
+            # Create formatted context for AI
+            search_result = SearchResult(
+                query=query,  # Fix: Add the required query field
+                pages=pages,
+                total_count=len(pages),
+                execution_time=time.time() - start_time,
+                api_calls_made=0  # No API calls for local search
+            )
+
+            formatted_context = self.content_processor.format_search_results_for_ai(search_result)
+
+            # Generate AI answer
+            messages = [
+                SystemMessage(content=get_system_prompt()),
+                HumanMessage(content=get_answer_generation_prompt(query, formatted_context))
+            ]
+
+            response = await self.llm.ainvoke(messages)
+            answer = response.content
+
+            # Calculate confidence based on results
+            confidence = min(0.9, 0.3 + (len(pages) * 0.1))
+
+            return OneNoteSearchResponse(
+                answer=answer,
+                sources=pages,
+                confidence=confidence,
+                search_query_used=query,
+                metadata={
+                    "execution_time": time.time() - start_time,
+                    "api_calls": 0,
+                    "total_results": len(pages),
+                    "search_method": search_method,
+                    "local_search_results": len(local_results)
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Error creating response from local results: {e}")
+            # Fallback to API search if local result processing fails
+            return await self._api_search_pages(query, 10, start_time, "api_fallback")
+
+    async def _api_search_pages(
+        self,
+        query: str,
+        max_results: int,
+        start_time: float,
+        search_method: str
+    ) -> OneNoteSearchResponse:
+        """Perform API-based search (original implementation)."""
         try:
             # Perform search
             search_result = await self.search_tool.search_pages(query, max_results)
@@ -755,7 +904,8 @@ class OneNoteAgent:
                     metadata={
                         "execution_time": search_result.execution_time,
                         "api_calls": search_result.api_calls_made,
-                        "total_results": search_result.total_count
+                        "total_results": search_result.total_count,
+                        "search_method": search_method
                     }
                 )
             else:
@@ -772,17 +922,21 @@ class OneNoteAgent:
                     sources=[],
                     confidence=0.1,
                     search_query_used=query,
-                    metadata={"no_results": True}
+                    metadata={
+                        "no_results": True,
+                        "search_method": search_method,
+                        "execution_time": time.time() - start_time
+                    }
                 )
 
-        except Exception as e:
-            logger.error(f"Search error: {e}")
+        except OneNoteSearchError as e:
+            logger.error(f"OneNote search error: {e}")
             return OneNoteSearchResponse(
-                answer=f"I encountered an error while searching: {e}",
+                answer=f"I encountered an error while searching OneNote: {e}",
                 sources=[],
                 confidence=0.0,
                 search_query_used=query,
-                metadata={"error": str(e)}
+                metadata={"search_error": str(e), "search_method": search_method}
             )
 
     async def initialize(self) -> None:
@@ -795,16 +949,106 @@ class OneNoteAgent:
             if not is_valid:
                 raise AuthenticationError("Token validation failed")
 
+            # Initialize local search if available
+            await self._initialize_local_search()
+
             logger.info("OneNote agent initialized successfully")
 
         except Exception as e:
             logger.error(f"Agent initialization failed: {e}")
             raise
 
+    async def _initialize_local_search(self) -> None:
+        """Initialize local search engine if cache is available."""
+        try:
+            if await self._check_local_search_available():
+                if self.local_search:
+                    await self.local_search.initialize()
+                    self._local_search_available = True
+                    logger.info("Local search engine initialized and ready")
+                else:
+                    logger.warning("Local search not available despite cache check")
+            else:
+                logger.info("Local search not available - will use API search")
+
+        except Exception as e:
+            logger.warning(f"Failed to initialize local search, using API search: {e}")
+            self._local_search_available = False
+
     def get_conversation_starters(self) -> List[str]:
         """Get example conversation starters."""
         from .prompts import CONVERSATION_STARTERS
         return CONVERSATION_STARTERS
+
+    async def get_cache_status(self) -> Dict[str, Any]:
+        """Get information about local cache status."""
+        try:
+            status = {
+                "local_search_available": self._local_search_available,
+                "cache_directory_exists": False,
+                "cached_pages_count": 0,
+                "last_sync": None,
+                "search_mode": "api"
+            }
+
+            # Check cache directory
+            if self.cache_manager:
+                cache_root = self.cache_manager.cache_root
+                status["cache_directory_exists"] = cache_root.exists()
+
+                if cache_root.exists():
+                    # Get cached pages count
+                    try:
+                        cached_pages = await self.cache_manager.get_all_cached_pages()
+                        status["cached_pages_count"] = len(cached_pages)
+
+                        if cached_pages:
+                            # Get most recent sync time
+                            latest_sync = max(page.metadata.cached_at for page in cached_pages)
+                            status["last_sync"] = latest_sync.isoformat()
+
+                    except Exception as e:
+                        logger.warning(f"Error getting cached pages count: {e}")
+
+            # Determine search mode
+            if self._local_search_available:
+                status["search_mode"] = "hybrid" if status["cached_pages_count"] > 0 else "api"
+            else:
+                status["search_mode"] = "api"
+
+            return status
+
+        except Exception as e:
+            logger.error(f"Error getting cache status: {e}")
+            return {
+                "local_search_available": False,
+                "error": str(e),
+                "search_mode": "api"
+            }
+
+    async def cleanup(self) -> None:
+        """Cleanup resources used by the agent."""
+        try:
+            # Close local search database connection
+            if self._local_search:
+                await self._local_search.close()
+                logger.debug("Local search engine closed")
+
+            # Close semantic search if it has cleanup
+            if hasattr(self._semantic_search_engine, 'close'):
+                await self._semantic_search_engine.close()
+
+        except Exception as e:
+            logger.warning(f"Error during agent cleanup: {e}")
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        await self.initialize()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit."""
+        await self.cleanup()
 
     async def list_notebooks(self) -> List[Dict[str, Any]]:
         """List all notebooks directly via search tool."""

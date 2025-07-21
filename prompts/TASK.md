@@ -14,7 +14,7 @@ This file tracks all project tasks using a priority-based system optimized for s
 
 ## Current Sprint - July 2025
 
-### P-0 (Immediate Tasks)
+### P-0 (Immediate Tasks - Execute Now)
 - [x] Complete codebase consistency audit (pip over uv, LangGraph over Pydantic AI)
 - [x] Create missing essential project files (README.md, pyproject.toml, requirements.txt, .env.example)
 - [x] Update all documentation to use pip instead of uv
@@ -25,8 +25,25 @@ This file tracks all project tasks using a priority-based system optimized for s
 - [x] Add /content command to display OneNote page content by title
 - [x] ✅ **COMPLETED**: Add authenticated user information to --info command output - 2025-07-18
 - [x] ✅ **COMPLETED**: Fix Microsoft Graph API 400 error for search and recent pages - 2025-07-20
-- [ ] **CURRENT: Implement Semantic Search Enhancement per PRP** - 2025-07-17
+- [ ] **CURRENT: OneNote Local Cache Implementation** - Phase 2 validation in progress
+  - **Status**: Foundation complete (97.4% tests passing), Phase 2 mock tests need final validation
+  - **Next**: Run VS Code task "pytest (all)" to validate Phase 2 mock tests
+  - **Then**: Implement real OneNoteContentFetcher and AssetDownloadManager
 - [ ] Improve test coverage to achieve at least 80% code coverage
+
+### P-0.1 (Critical Next Steps - This Sprint)
+- [ ] **Phase 2 Final Validation Run**
+  - Use VS Code task "pytest (all)" for test execution
+  - Verify all mock-based tests pass after model compatibility fixes
+  - Document results in TEST_RUN.md with completion marker
+- [ ] **OneNoteContentFetcher Real Implementation** 
+  - Replace mocks with Microsoft Graph API integration
+  - Add proper rate limiting and error handling
+  - Create integration tests for real API calls
+- [ ] **AssetDownloadManager Real Implementation**
+  - Replace mocks with HTTP download functionality
+  - Add progress tracking and file validation
+  - Create integration tests for asset downloads
 
 ### P-1 (Sooner than Later)
 - [ ] Execute OneNote Copilot CLI PRP using GitHub Copilot agent mode
@@ -188,6 +205,16 @@ python -m pytest tests/ -v --cov=src --cov-report=term-missing > TEST_RUN.md 2>&
 3. **MONITOR TEST_RUN.md contents** to track real-time progress
 4. **MAXIMUM wait: 5 minutes** - if tests don't complete, investigate but don't abandon
 5. **USE SAME PATTERN for all test types** (unit, integration, coverage)
+
+<!--  ── Test execution rules ───────────────────────────────────────── -->
+
+#### VS Code Task Integration
+**When working with GitHub Copilot in VS Code:**
+- **ALWAYS** invoke the VS Code task **"pytest (all)"** instead of typing `pytest` in the terminal
+- **Wait until that task TERMINATES** (VS Code Tasks API "terminated" event) before you continue with any other action
+- **If the task fails**, surface the full task output in chat so I can diagnose it
+- **Never start a second long-running task or terminal command** until the current task has finished
+- This ensures proper task lifecycle management and prevents resource conflicts
 
 #### Why This Approach Is Critical
 - **Prevents premature actions**: Agent won't move to next step while tests are still running

@@ -223,29 +223,46 @@ class TestReportGenerator:
     @pytest.mark.asyncio
     async def test_generate_dashboard_success(self, generator):
         """Test successful dashboard generation."""
-        # Mock the component analyzers
-        generator.cache_analyzer.analyze_cache = AsyncMock(return_value=Mock(
-            health_score=85.0,
+        from datetime import datetime
+
+        from src.storage.cache_analyzer import (AnalysisReport, CacheStats,
+                                                PerformanceMetrics,
+                                                UsagePattern)
+        from src.storage.performance_monitor import PerformanceReport
+        from src.storage.storage_optimizer import (OptimizationPlan,
+                                                   OptimizationReport,
+                                                   StorageStats)
+
+        # Mock the component analyzers with proper dataclass objects
+        cache_report = AnalysisReport(
+            timestamp=datetime.now(),
+            cache_stats=CacheStats(100, 50000000, 500000, 5, 10, None, None, datetime.now()),
+            usage_patterns=UsagePattern([], [], {}, {}, 5.0, []),
+            performance_metrics=PerformanceMetrics(300.0, 100.0, 800.0, 95.0, 85.0, 90.0),
             recommendations=["Test cache recommendation"],
-            cache_stats=Mock(),
-            usage_patterns=Mock(),
-            performance_metrics=Mock()
-        ))
+            health_score=85.0
+        )
 
-        generator.storage_optimizer.analyze_storage = AsyncMock(return_value=Mock(
-            health_score=90.0,
+        storage_report = OptimizationReport(
+            timestamp=datetime.now(),
+            storage_stats=StorageStats(120000000, 50000000, 20000000, 10000000, 50000000000, 1.2),
+            optimization_plan=OptimizationPlan(15000000, [], [], [], 15000000, "Low risk"),
             recommendations=["Test storage recommendation"],
-            storage_stats=Mock(),
-            optimization_plan=Mock()
-        ))
+            health_score=90.0
+        )
 
-        generator.performance_monitor.generate_performance_report = AsyncMock(return_value=Mock(
+        performance_report = PerformanceReport(
+            timestamp=datetime.now(),
             system_health_score=88.0,
-            recommendations=["Test performance recommendation"],
             performance_trends=[],
             bottlenecks=[],
-            alerting_summary={}
-        ))
+            alerting_summary={},
+            recommendations=["Test performance recommendation"]
+        )
+
+        generator.cache_analyzer.analyze_cache = AsyncMock(return_value=cache_report)
+        generator.storage_optimizer.analyze_storage = AsyncMock(return_value=storage_report)
+        generator.performance_monitor.generate_performance_report = AsyncMock(return_value=performance_report)
 
         dashboard = await generator.generate_dashboard()
 
@@ -350,7 +367,8 @@ class TestReportGenerator:
         result_path = await generator.export_report(sample_dashboard_data, options, output_path)
 
         # Should create error file instead
-        assert result_path.suffix == '.error.txt'
+        assert result_path.suffix == '.txt'
+        assert 'error' in result_path.name
         assert result_path.exists()
 
         with open(result_path, 'r', encoding='utf-8') as f:
@@ -415,7 +433,9 @@ class TestReportGenerator:
         html_content = generator._html_template.render(**template_data)
 
         assert "OneNote Copilot Analytics Report" in html_content
-        assert str(sample_dashboard_data.health_scores['overall_health']) in html_content
+        # Health score is formatted as integer in template (e.g., 88% instead of 88.1%)
+        expected_health = f"{sample_dashboard_data.health_scores['overall_health']:.0f}"
+        assert expected_health in html_content
         assert "System Summary" in html_content
         assert "Top Recommendations" in html_content
 

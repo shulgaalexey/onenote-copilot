@@ -494,6 +494,15 @@ class StorageOptimizer:
         optimization_plan: OptimizationPlan
     ) -> List[str]:
         """Generate storage optimization recommendations."""
+        # Check for error conditions (invalid paths detected)
+        if (storage_stats.total_size_bytes == 0 and
+            storage_stats.database_size_bytes == 0 and
+            storage_stats.assets_size_bytes == 0 and
+            storage_stats.temp_size_bytes == 0 and
+            storage_stats.utilization_percentage == 0.0 and
+            not self.db_path.exists()):
+            return ["Storage analysis failed: Invalid paths detected"]
+
         recommendations = []
 
         # Size-based recommendations
@@ -552,6 +561,16 @@ class StorageOptimizer:
         optimization_plan: OptimizationPlan
     ) -> float:
         """Calculate overall storage health score (0-100)."""
+        # Check for error conditions (all storage stats are zero except available space)
+        # This indicates invalid paths or analysis failure
+        if (storage_stats.total_size_bytes == 0 and
+            storage_stats.database_size_bytes == 0 and
+            storage_stats.assets_size_bytes == 0 and
+            storage_stats.temp_size_bytes == 0 and
+            storage_stats.utilization_percentage == 0.0 and
+            not self.db_path.exists()):  # Additional check for invalid paths
+            return 0.0
+
         score = 100.0
 
         # Size penalty

@@ -88,12 +88,16 @@ class TestCacheAnalyzer:
         analyzer._setup_analytics_db()
 
         with sqlite3.connect(analyzer.analytics_db_path) as conn:
-            # Insert sample search analytics
+            # Insert sample search analytics (using recent dates)
+            from datetime import datetime, timedelta
+            recent_date = datetime.now() - timedelta(days=1)  # Yesterday
+            recent_date_str = recent_date.isoformat()
+
             search_data = [
-                ('2025-01-20T10:00:00', 'meeting notes', 5, 150.0, True),
-                ('2025-01-20T10:30:00', 'project plan', 3, 120.0, True),
-                ('2025-01-20T11:00:00', 'important tasks', 8, 200.0, True),
-                ('2025-01-20T14:00:00', 'meeting notes', 5, 100.0, True),
+                (recent_date_str, 'meeting notes', 5, 150.0, True),
+                (recent_date_str, 'project plan', 3, 120.0, True),
+                (recent_date_str, 'important tasks', 8, 200.0, True),
+                (recent_date_str, 'meeting notes', 5, 100.0, True),
             ]
 
             conn.executemany("""
@@ -103,9 +107,9 @@ class TestCacheAnalyzer:
 
             # Insert sample page access data
             access_data = [
-                ('2025-01-20T10:00:00', 'page1', 'Meeting Notes', 'search'),
-                ('2025-01-20T10:30:00', 'page2', 'Project Plan', 'search'),
-                ('2025-01-20T14:00:00', 'page1', 'Meeting Notes', 'search'),
+                (recent_date_str, 'page1', 'Meeting Notes', 'search'),
+                (recent_date_str, 'page2', 'Project Plan', 'search'),
+                (recent_date_str, 'page1', 'Meeting Notes', 'search'),
             ]
 
             conn.executemany("""

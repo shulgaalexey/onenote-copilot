@@ -113,16 +113,24 @@ class ReportGenerator:
             )
 
             # Calculate health scores
-            health_scores = {
-                'cache_health': cache_analysis.health_score,
-                'storage_health': storage_analysis.health_score,
-                'performance_health': performance_analysis.system_health_score,
-                'overall_health': (
-                    cache_analysis.health_score +
-                    storage_analysis.health_score +
-                    performance_analysis.system_health_score
-                ) / 3
-            }
+            try:
+                health_scores = {
+                    'cache_health': getattr(cache_analysis, 'health_score', 0.0),
+                    'storage_health': getattr(storage_analysis, 'health_score', 0.0),
+                    'performance_health': getattr(performance_analysis, 'system_health_score', 0.0),
+                    'overall_health': (
+                        getattr(cache_analysis, 'health_score', 0.0) +
+                        getattr(storage_analysis, 'health_score', 0.0) +
+                        getattr(performance_analysis, 'system_health_score', 0.0)
+                    ) / 3
+                }
+            except Exception as e:
+                health_scores = {
+                    'cache_health': 0.0,
+                    'storage_health': 0.0,
+                    'performance_health': 0.0,
+                    'overall_health': 0.0
+                }
 
             return DashboardData(
                 timestamp=datetime.now(),

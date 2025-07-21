@@ -395,11 +395,18 @@ class CacheAnalyzer:
         performance_metrics: PerformanceMetrics
     ) -> float:
         """Calculate overall cache health score (0-100)."""
+        # Check for error conditions (all metrics are zero/empty)
+        if (cache_stats.total_pages == 0 and
+            performance_metrics.index_health_score == 0.0 and
+            performance_metrics.avg_search_time_ms == 0.0 and
+            usage_patterns.avg_searches_per_day == 0.0):
+            return 0.0
+
         score = 0.0
 
         # Performance component (40% weight)
         perf_score = min(100, performance_metrics.index_health_score)
-        if performance_metrics.avg_search_time_ms < 500:
+        if performance_metrics.avg_search_time_ms < 500 and performance_metrics.avg_search_time_ms > 0:
             perf_score = min(100, perf_score + 20)  # Bonus for fast searches
 
         score += perf_score * 0.4

@@ -54,13 +54,23 @@ class TestPerformanceMonitor:
         monitor._setup_metrics_db()
 
         with sqlite3.connect(monitor.metrics_db_path) as conn:
-            # Insert sample performance metrics
+            # Insert sample performance metrics - need at least 5 per operation for trends
             now = datetime.now()
             metrics_data = [
+                # Search operations (6 entries for trend analysis)
                 (now.isoformat(), 'search', 150.0, 512.0, 25.0, '{"query": "test"}'),
                 ((now - timedelta(minutes=5)).isoformat(), 'search', 200.0, 480.0, 30.0, '{"query": "meeting"}'),
-                ((now - timedelta(minutes=10)).isoformat(), 'index', 1000.0, 600.0, 45.0, '{"pages": 10}'),
-                ((now - timedelta(hours=1)).isoformat(), 'search', 300.0, 520.0, 35.0, '{"query": "project"}'),
+                ((now - timedelta(minutes=10)).isoformat(), 'search', 180.0, 500.0, 28.0, '{"query": "project"}'),
+                ((now - timedelta(minutes=15)).isoformat(), 'search', 220.0, 490.0, 32.0, '{"query": "notes"}'),
+                ((now - timedelta(minutes=20)).isoformat(), 'search', 190.0, 510.0, 29.0, '{"query": "document"}'),
+                ((now - timedelta(hours=1)).isoformat(), 'search', 300.0, 520.0, 35.0, '{"query": "archive"}'),
+                # Index operations (5 entries for trend analysis)
+                ((now - timedelta(minutes=30)).isoformat(), 'index', 1000.0, 600.0, 45.0, '{"pages": 10}'),
+                ((now - timedelta(minutes=35)).isoformat(), 'index', 1200.0, 620.0, 48.0, '{"pages": 12}'),
+                ((now - timedelta(minutes=40)).isoformat(), 'index', 1100.0, 610.0, 46.0, '{"pages": 11}'),
+                ((now - timedelta(minutes=45)).isoformat(), 'index', 1300.0, 630.0, 50.0, '{"pages": 13}'),
+                ((now - timedelta(hours=2)).isoformat(), 'index', 1150.0, 615.0, 47.0, '{"pages": 10}'),
+                # Bulk sync operation (just one, won't appear in trends due to < 5 threshold)
                 ((now - timedelta(hours=2)).isoformat(), 'bulk_sync', 5000.0, 800.0, 60.0, '{"pages": 100}'),
             ]
 

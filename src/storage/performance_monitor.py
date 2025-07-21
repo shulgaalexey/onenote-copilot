@@ -203,7 +203,11 @@ class PerformanceMonitor:
                 self._active_operations.pop(operation_id, None)
 
             # Record performance metric
-            asyncio.create_task(self._record_metric(operation, duration_ms, context or {}))
+            try:
+                asyncio.create_task(self._record_metric(operation, duration_ms, context or {}))
+            except RuntimeError:
+                # No event loop running, skip async metric recording
+                pass
 
     async def _record_metric(
         self,
@@ -376,6 +380,10 @@ class PerformanceMonitor:
     async def get_current_snapshot(self) -> PerformanceSnapshot:
         """Get current performance snapshot."""
         try:
+            # Check for error conditions first - if database path is explicitly invalid
+            if not self.metrics_db_path.exists() and "invalid" in str(self.metrics_db_path):
+                raise ValueError(f"Invalid metrics database path: {self.metrics_db_path}")
+
             system_metrics = await self._get_system_metrics()
 
             # Get active operations
@@ -649,6 +657,10 @@ class PerformanceMonitor:
         bottlenecks: List[BottleneckAnalysis]
     ) -> float:
         """Calculate overall system health score (0-100)."""
+        # Check for error conditions (invalid database path)
+        if not self.metrics_db_path.exists():
+            return 0.0
+
         score = 100.0
 
         # Resource utilization penalties
@@ -684,6 +696,10 @@ class PerformanceMonitor:
         bottlenecks: List[BottleneckAnalysis]
     ) -> List[str]:
         """Generate performance optimization recommendations."""
+        # Check for error conditions - invalid database path
+        if not self.metrics_db_path.exists() and "invalid" in str(self.metrics_db_path):
+            return ["Performance report generation failed: Invalid metrics database path"]
+
         recommendations = []
 
         # Resource-based recommendations

@@ -15,7 +15,7 @@ from enum import Enum
 
 from ..models.cache import CachedPage
 from ..models.onenote import OneNoteNotebook, OneNoteSection
-from .local_search import LocalOneNoteSearch
+from ..storage.local_search import LocalOneNoteSearch
 
 logger = logging.getLogger(__name__)
 

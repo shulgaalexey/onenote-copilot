@@ -182,13 +182,13 @@ class Settings(BaseSettings):
         description="Markdown format style (github, commonmark, etc.)"
     )
     onenote_batch_download_size: int = Field(
-        default=10,
+        default=20,  # Increased from 10 for better performance with large caches
         description="Number of pages to download in parallel",
         gt=1,
         le=50
     )
     onenote_retry_attempts: int = Field(
-        default=3,
+        default=2,  # Reduced from 3 for faster failure handling with fallbacks
         description="Number of retry attempts for failed downloads",
         gt=0,
         le=10
@@ -198,8 +198,20 @@ class Settings(BaseSettings):
         description="Automatically clean up orphaned assets"
     )
     onenote_enable_compression: bool = Field(
-        default=False,
+        default=True,  # Enabled by default for space efficiency with large caches
         description="Compress cached content to save space"
+    )
+    onenote_cache_index_batch_size: int = Field(
+        default=100,  # New setting for bulk search indexing operations
+        description="Batch size for search index operations",
+        gt=10,
+        le=1000
+    )
+    onenote_memory_cache_size_mb: int = Field(
+        default=50,  # New setting for in-memory cache of frequently accessed content
+        description="In-memory cache size in MB for hot content",
+        gt=1,
+        le=500
     )
 
     # Semantic Search Configuration
@@ -214,7 +226,7 @@ class Settings(BaseSettings):
         le=3072
     )
     embedding_batch_size: int = Field(
-        default=100,
+        default=200,  # Increased from 100 for better throughput with large caches
         description="Batch size for embedding generation",
         gt=0,
         le=2048
@@ -234,7 +246,7 @@ class Settings(BaseSettings):
         le=1.0
     )
     semantic_search_limit: int = Field(
-        default=10,
+        default=20,  # Increased from 10 for better large cache coverage
         description="Maximum number of semantic search results",
         gt=0,
         le=100
@@ -246,19 +258,19 @@ class Settings(BaseSettings):
         le=1.0
     )
     max_chunks_per_page: int = Field(
-        default=5,
+        default=8,  # Increased from 5 for better large page handling
         description="Maximum number of text chunks per OneNote page",
         gt=0,
         le=20
     )
     chunk_size: int = Field(
-        default=1000,
+        default=1500,  # Increased from 1000 for fewer chunks with large caches
         description="Size of text chunks for embedding",
         gt=100,
         le=8000
     )
     chunk_overlap: int = Field(
-        default=200,
+        default=300,  # Increased proportionally with chunk_size
         description="Overlap between text chunks",
         ge=0,
         le=500
@@ -272,7 +284,7 @@ class Settings(BaseSettings):
         description="Cache embeddings to reduce API calls"
     )
     background_indexing: bool = Field(
-        default=False,
+        default=True,  # Enabled for better large cache performance
         description="Enable background indexing of new content"
     )
 
@@ -401,13 +413,13 @@ class Settings(BaseSettings):
     def validate_onenote_cache_root(cls, v: Union[str, Path]) -> Path:
         """Convert cache root to Path and validate it can be created."""
         cache_path = Path(v) if isinstance(v, str) else v
-        
+
         # Create directory if it doesn't exist
         try:
             cache_path.mkdir(parents=True, exist_ok=True)
         except (OSError, PermissionError) as e:
             raise ValueError(f"Cannot create OneNote cache directory {cache_path}: {e}")
-        
+
         return cache_path
 
     @field_validator("debug_enabled", mode="before")

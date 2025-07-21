@@ -147,72 +147,12 @@ class OneNoteSearchTool:
         logger.debug(f"Processed query: '{natural_query}' -> '{query}'")
         return query
 
-    def _generate_query_variations(self, natural_query: str) -> List[str]:
-        """
-        Generate multiple query variations to improve search success.
-
-        Args:
-            natural_query: Original natural language query
-
-        Returns:
-            List of query variations to try
-        """
-        variations = []
-
-        # Always include the original query (cleaned)
-        original = re.sub(r'[?!]', '', natural_query.strip())
-        variations.append(original)
-
-        # Add processed version
-        processed = self._prepare_search_query(natural_query)
-        if processed and processed != original:
-            variations.append(processed)
-
-        # Extract key content words (preserve important terms)
-        words = re.findall(r'\b\w+\b', natural_query.lower())
-        content_words = [w for w in words if w not in {
-            'what', 'did', 'i', 'write', 'about', 'the', 'a', 'an', 'and', 'or',
-            'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'
-        }]
-
-        if content_words:
-            # Join content words
-            content_query = ' '.join(content_words)
-            if content_query and content_query not in variations:
-                variations.append(content_query)
-
-            # For compound terms, try individual words and partial combinations
-            if len(content_words) >= 2:
-                # Try each individual word
-                for word in content_words:
-                    if word not in variations and len(word) >= 3:
-                        variations.append(word)
-
-                # Try pairs of words
-                for i in range(len(content_words) - 1):
-                    pair = f"{content_words[i]} {content_words[i+1]}"
-                    if pair not in variations:
-                        variations.append(pair)
-
-            # Try just the last content word (often the main topic)
-            if len(content_words) > 1:
-                last_word = content_words[-1]
-                if last_word not in variations:
-                    variations.append(last_word)
-
-        # Remove empty variations and deduplicate
-        variations = [v for v in variations if v and len(v.strip()) >= 2]
-        unique_variations = []
-        for v in variations:
-            if v not in unique_variations:
-                unique_variations.append(v)
-
-        logger.debug(f"Generated {len(unique_variations)} query variations: {unique_variations}")
-        return unique_variations
-
     async def search_pages(self, query: str, max_results: Optional[int] = None) -> SearchResult:
         """
-        Search OneNote pages using the Microsoft Graph API.
+        Search OneNote pages using the Microsoft Graph API (fallback method).
+
+        NOTE: This is now primarily a fallback method. Local search should be used as the primary search method
+        for better performance and capabilities.
 
         Args:
             query: Search query string
@@ -241,64 +181,19 @@ class OneNoteSearchTool:
 
             max_results = max_results or self.max_results
 
-            logger.debug(f"Searching OneNote pages for: '{original_query}' (processed: '{processed_query}')")
+            logger.debug(f"API search (fallback) for: '{original_query}' (processed: '{processed_query}')")
 
             # Get authentication token
             token = await self.authenticator.get_valid_token()
 
-            # Search pages by title first
+            # Simple API search - try title search first, then fallback to section-based if needed
             pages_data, api_calls = await self._search_pages_api(processed_query, token, max_results)
 
-            # If title search yields few results, try content search
-            if len(pages_data) < 3:
-                logger.debug(f"Title search returned {len(pages_data)} results, trying content search")
-                content_pages_data, content_api_calls = await self._search_pages_by_content(processed_query, token, max_results)
-                api_calls += content_api_calls
-
-                # Merge results, avoiding duplicates
-                existing_ids = {page.get('id') for page in pages_data}
-                for page in content_pages_data:
-                    if page.get('id') not in existing_ids:
-                        pages_data.append(page)
-                        if len(pages_data) >= max_results:
-                            break
-
-            # If still no results, try query variations
+            # If no results, try section-based search as fallback
             if len(pages_data) == 0:
-                logger.debug("No results found, trying query variations")
-                query_variations = self._generate_query_variations(original_query)
-
-                for i, variation in enumerate(query_variations[1:], 1):  # Skip first (already tried)
-                    if len(pages_data) >= max_results:
-                        break
-
-                    logger.debug(f"Trying variation {i}: '{variation}'")
-
-                    # Try title search with variation
-                    var_pages_data, var_api_calls = await self._search_pages_api(variation, token, max_results)
-                    api_calls += var_api_calls
-
-                    # Add new results
-                    existing_ids = {page.get('id') for page in pages_data}
-                    for page in var_pages_data:
-                        if page.get('id') not in existing_ids:
-                            pages_data.append(page)
-
-                    # If we found results, also try content search for this variation
-                    if len(var_pages_data) > 0 and len(pages_data) < max_results:
-                        var_content_pages, var_content_api_calls = await self._search_pages_by_content(variation, token, max_results - len(pages_data))
-                        api_calls += var_content_api_calls
-
-                        for page in var_content_pages:
-                            if page.get('id') not in existing_ids:
-                                pages_data.append(page)
-                                if len(pages_data) >= max_results:
-                                    break
-
-                    # Stop if we found enough results
-                    if len(pages_data) >= 3:  # Found some results
-                        logger.debug(f"Found {len(pages_data)} results with variation '{variation}'")
-                        break
+                logger.debug("No results from direct API search, trying section-based fallback")
+                pages_data, fallback_api_calls = await self._search_pages_by_sections(processed_query, token, max_results)
+                api_calls += fallback_api_calls
 
             # Convert to OneNotePage models
             pages = []
@@ -310,9 +205,9 @@ class OneNoteSearchTool:
                     logger.warning(f"Failed to parse page data: {e}")
                     continue
 
-            # Fetch content for top results
+            # Fetch content for top results (reduced from 5 to 3 for efficiency)
             if pages:
-                content_api_calls = await self._fetch_page_contents(pages[:5], token)
+                content_api_calls = await self._fetch_page_contents(pages[:3], token)
                 api_calls += content_api_calls
 
             execution_time = time.time() - start_time
@@ -325,14 +220,14 @@ class OneNoteSearchTool:
                 api_calls_made=api_calls,
                 search_metadata={
                     "search_endpoint": "/me/onenote/pages",
-                    "search_parameter": "$search",
+                    "search_method": "api_fallback",
                     "original_query": original_query,
                     "processed_query": processed_query,
-                    "content_fetched": min(5, len(pages))
+                    "content_fetched": min(3, len(pages))
                 }
             )
 
-            logger.info(f"Search completed: {len(pages)} pages found in {execution_time:.2f}s")
+            logger.info(f"API fallback search completed: {len(pages)} pages found in {execution_time:.2f}s")
             return result
 
         except AuthenticationError:
@@ -413,105 +308,6 @@ class OneNoteSearchTool:
         except Exception as e:
             logger.error(f"API request failed: {e}")
             raise OneNoteSearchError(f"API request failed: {e}")
-
-    async def _search_pages_by_content(self, query: str, token: str, max_results: int) -> tuple[List[Dict[str, Any]], int]:
-        """
-        Search pages by fetching recent pages and filtering by content.
-
-        This is a fallback method when title search doesn't yield enough results.
-        It fetches recent pages and searches their content locally.
-
-        Args:
-            query: Search query
-            token: Authentication token
-            max_results: Maximum results to return
-
-        Returns:
-            Tuple of (pages data, api calls made)
-        """
-        await self._enforce_rate_limit()
-
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-
-        # Get recent pages (no filter, just recent ones)
-        params = {
-            "$top": min(20, max_results * 2),  # Get more pages to search through
-            "$select": "id,title,createdDateTime,lastModifiedDateTime,contentUrl,parentSection,parentNotebook",
-            "$expand": "parentSection,parentNotebook",
-            "$orderby": "lastModifiedDateTime desc"
-        }
-
-        endpoint = f"{self.base_url}/me/onenote/pages"
-        api_calls = 0
-
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(endpoint, headers=headers, params=params)
-
-                if response.status_code == 200:
-                    data = response.json()
-                    pages = data.get("value", [])
-                    api_calls += 1
-
-                    if not pages:
-                        return [], api_calls
-
-                    logger.debug(f"Fetched {len(pages)} recent pages for content search")
-
-                    # Convert to OneNotePage objects for content fetching
-                    page_objects = []
-                    for page_data in pages:
-                        try:
-                            page = OneNotePage(**page_data)
-                            page_objects.append(page)
-                        except Exception as e:
-                            logger.warning(f"Failed to parse page data: {e}")
-                            continue
-
-                    # Fetch content for these pages
-                    content_api_calls = await self._fetch_page_contents(page_objects, token)
-                    api_calls += content_api_calls
-
-                    # Filter pages by content
-                    matching_pages = []
-                    query_lower = query.lower()
-                elif response.status_code == 400:
-                    # Handle "too many sections" error - fallback to section-by-section content search
-                    logger.warning(f"Content search endpoint returned 400, falling back to section-based content search for query: {query}")
-                    return await self._search_content_by_sections(query, token, max_results)
-                else:
-                    logger.warning(f"Content search failed: {response.status_code}")
-                    return [], 1
-
-                for page in page_objects:
-                    if hasattr(page, 'text_content') and page.text_content:
-                        if query_lower in page.text_content.lower():
-                            # Convert back to dict format to match expected return type
-                            page_dict = {
-                                'id': page.id,
-                                'title': page.title,
-                                'createdDateTime': page.created_date_time,
-                                'lastModifiedDateTime': page.last_modified_date_time,
-                                'contentUrl': page.content_url,
-                                'parentSection': page.parent_section,
-                                'parentNotebook': page.parent_notebook
-                            }
-                            matching_pages.append(page_dict)
-
-                            if len(matching_pages) >= max_results:
-                                break
-
-                logger.debug(f"Content search found {len(matching_pages)} matching pages")
-                return matching_pages, api_calls
-
-        except httpx.TimeoutException:
-            raise OneNoteSearchError("Content search request timed out")
-        except Exception as e:
-            logger.error(f"Content search failed: {e}")
-            return [], api_calls
 
     async def _fetch_page_contents(self, pages: List[OneNotePage], token: str) -> int:
         """
@@ -652,72 +448,22 @@ class OneNoteSearchTool:
 
     async def _enforce_rate_limit(self) -> None:
         """
-        Enforce rate limiting to respect Microsoft Graph API limits.
+        Simple rate limiting to respect Microsoft Graph API limits.
 
-        Microsoft Graph allows 10,000 requests per 10 minutes per user.
-        We implement a smart rate limit with progressive backoff.
+        Note: With local cache as primary search, API usage should be minimal.
+        This is a simplified version for the remaining API fallback calls.
         """
         current_time = time.time()
 
-        # Reset counter every 10 minutes
-        if current_time - self._rate_limit_window_start > 600:  # 10 minutes
-            self._request_count = 0
-            self._rate_limit_window_start = current_time
-
-        # Progressive rate limiting based on usage
-        if self._request_count >= 80:  # Approaching limit more conservatively
-            wait_time = 600 - (current_time - self._rate_limit_window_start)
-            if wait_time > 0:
-                # Warn user about rate limiting
-                logger.warning(f"Rate limit approaching ({self._request_count}/100 requests), waiting {wait_time:.1f} seconds")
-                
-                # For interactive commands like /recent, fail fast instead of waiting
-                if wait_time > 60:  # If we'd wait more than 1 minute
-                    raise OneNoteSearchError(
-                        f"Rate limit reached. Please wait {wait_time/60:.1f} minutes before trying again, "
-                        f"or try a more specific search to reduce API calls."
-                    )
-                
-                await asyncio.sleep(wait_time)
-                self._request_count = 0
-                self._rate_limit_window_start = time.time()
-
-        # Adaptive delay based on current usage
+        # Simple delay between API calls
         time_since_last = current_time - self._last_request_time
-        
-        # Increase delay as we approach rate limit
-        if self._request_count > 60:
-            min_delay = 0.2  # 200ms delay when approaching limit
-        elif self._request_count > 30:
-            min_delay = 0.15  # 150ms delay for moderate usage
-        else:
-            min_delay = 0.1  # 100ms delay for light usage
-            
+        min_delay = 0.1  # 100ms delay between API calls
+
         if time_since_last < min_delay:
             await asyncio.sleep(min_delay - time_since_last)
 
         self._request_count += 1
         self._last_request_time = time.time()
-
-    def get_rate_limit_status(self) -> Dict[str, Any]:
-        """
-        Get current rate limit status for user information.
-        
-        Returns:
-            Dictionary with rate limit information
-        """
-        current_time = time.time()
-        window_elapsed = current_time - self._rate_limit_window_start
-        window_remaining = max(0, 600 - window_elapsed)  # 10 minutes = 600 seconds
-        
-        return {
-            "requests_made": self._request_count,
-            "requests_limit": 100,  # Our conservative limit
-            "window_elapsed_minutes": window_elapsed / 60,
-            "window_remaining_minutes": window_remaining / 60,
-            "percentage_used": (self._request_count / 100) * 100,
-            "is_approaching_limit": self._request_count >= 60
-        }
 
     async def get_recent_pages(self, limit: int = 10) -> List[OneNotePage]:
         """
@@ -788,77 +534,77 @@ class OneNoteSearchTool:
     async def _get_recent_pages_fallback(self, limit: int = 10) -> List[OneNotePage]:
         """
         Optimized fallback for getting recent pages when main endpoint fails.
-        
+
         This method uses section-by-section retrieval but with several optimizations:
         1. Fetches only metadata initially (no content)
         2. Limits total pages processed to avoid rate limiting
         3. Only fetches content for the final limited set
-        
+
         Args:
             limit: Maximum number of recent pages to return
-            
+
         Returns:
             List of recent pages with content loaded
         """
         try:
             logger.info(f"Using optimized recent pages fallback for {limit} pages")
-            
+
             token = await self.authenticator.get_valid_token()
-            
+
             # Get all sections first
             sections = await self._get_all_sections(token)
             logger.debug(f"Found {len(sections)} sections for recent pages fallback")
-            
+
             if not sections:
                 return []
-            
+
             all_pages = []
             pages_processed = 0
             # Process sections but limit total pages to avoid rate limits
             max_pages_to_process = min(50, limit * 3)  # Process up to 3x the requested limit
-            
+
             for i, section in enumerate(sections):
                 section_id = section.get("id")
                 section_name = section.get("displayName", "Unknown")
-                
+
                 try:
                     logger.debug(f"Getting pages from section: {section_name} ({i+1}/{len(sections)})")
-                    
+
                     # Get pages metadata only (no content yet)
                     section_pages = await self._get_pages_from_section(
                         section_id, token, max_pages_to_process - pages_processed
                     )
-                    
+
                     if section_pages:
                         all_pages.extend(section_pages)
                         pages_processed += len(section_pages)
                         logger.debug(f"Retrieved {len(section_pages)} pages from section '{section_name}'")
-                    
+
                     # Stop if we have enough pages to choose from
                     if pages_processed >= max_pages_to_process:
                         logger.debug(f"Reached processing limit of {max_pages_to_process} pages")
                         break
-                        
+
                     # Small delay between sections to respect API limits
                     await asyncio.sleep(0.1)  # Reduced delay for fallback
-                    
+
                 except Exception as e:
                     logger.warning(f"Failed to get pages from section '{section_name}': {e}")
                     continue
-            
+
             # Sort by last modified date (newest first) and limit
             all_pages.sort(key=lambda p: p.last_modified_date_time, reverse=True)
             recent_pages = all_pages[:limit]
-            
+
             logger.info(f"Selected {len(recent_pages)} most recent pages from {len(all_pages)} total pages")
-            
+
             # Now fetch content only for the limited set
             if recent_pages:
                 logger.debug(f"Fetching content for {len(recent_pages)} selected recent pages")
                 await self._fetch_page_contents(recent_pages, token)
-            
+
             return recent_pages
-            
+
         except Exception as e:
             logger.error(f"Recent pages fallback failed: {e}")
             # Return empty list rather than failing completely
@@ -867,7 +613,7 @@ class OneNoteSearchTool:
     async def get_all_pages(self, limit: Optional[int] = None) -> List[OneNotePage]:
         """
         Get all OneNote pages from all notebooks using section-by-section approach.
-        
+
         This method handles cases where accounts have many sections by fetching
         sections first, then getting pages for each section individually.
 
@@ -899,26 +645,26 @@ class OneNoteSearchTool:
             for i, section in enumerate(sections):
                 section_id = section.get("id")
                 section_name = section.get("displayName", "Unknown")
-                
+
                 try:
                     logger.debug(f"Getting pages from section: {section_name} ({i+1}/{len(sections)})")
-                    
+
                     # Get pages for this specific section
                     section_pages = await self._get_pages_from_section(section_id, token, limit)
-                    
+
                     if section_pages:
                         all_pages.extend(section_pages)
                         pages_fetched += len(section_pages)
                         logger.debug(f"Retrieved {len(section_pages)} pages from section '{section_name}'")
-                    
+
                     # Stop if we've reached the limit
                     if limit and pages_fetched >= limit:
                         all_pages = all_pages[:limit]  # Trim to exact limit
                         break
-                        
+
                     # Small delay between sections to respect API limits
                     await asyncio.sleep(0.2)
-                    
+
                 except Exception as e:
                     logger.warning(f"Failed to get pages from section '{section_name}': {e}")
                     continue
@@ -1016,7 +762,7 @@ class OneNoteSearchTool:
 
         Args:
             section_id: Section ID to get pages from
-            token: Authentication token  
+            token: Authentication token
             remaining_limit: Optional remaining limit for total pages
 
         Returns:
@@ -1192,29 +938,29 @@ class OneNoteSearchTool:
     async def _search_pages_by_sections(self, query: str, token: str, max_results: int) -> tuple[List[Dict[str, Any]], int]:
         """
         Search pages by fetching all pages section-by-section and filtering by title.
-        
+
         This is a fallback method when the main search endpoint fails with 400 error
         for accounts with too many sections.
-        
+
         Args:
             query: Search query
             token: Authentication token
             max_results: Maximum results to return
-            
+
         Returns:
             Tuple of (pages data, api calls made)
         """
         try:
             logger.info(f"Using section-by-section search fallback for query: '{query}'")
-            
+
             # Get all pages using our section-by-section approach
             all_pages = await self.get_all_pages()
             api_calls = len(await self._get_all_sections(token))  # Approximate API calls
-            
+
             # Filter pages by title matching the query
             query_lower = query.lower()
             matching_pages = []
-            
+
             for page in all_pages:
                 if query_lower in page.title.lower():
                     matching_pages.append({
@@ -1226,75 +972,15 @@ class OneNoteSearchTool:
                         "parentSection": page.parent_section,
                         "parentNotebook": page.parent_notebook
                     })
-                    
+
                     if len(matching_pages) >= max_results:
                         break
-                        
+
             logger.info(f"Section-by-section search found {len(matching_pages)} matching pages")
             return matching_pages, api_calls
-            
+
         except Exception as e:
             logger.error(f"Section-by-section search failed: {e}")
-            return [], 0
-
-    async def _search_content_by_sections(self, query: str, token: str, max_results: int) -> tuple[List[Dict[str, Any]], int]:
-        """
-        Search pages by content using section-by-section approach.
-        
-        This is a fallback method when the content search endpoint fails with 400 error.
-        
-        Args:
-            query: Search query
-            token: Authentication token
-            max_results: Maximum results to return
-            
-        Returns:
-            Tuple of (pages data, api calls made)
-        """
-        try:
-            logger.info(f"Using section-by-section content search fallback for query: '{query}'")
-            
-            # Get all pages using our section-by-section approach 
-            # Limit to more recent pages for content search efficiency
-            all_pages = await self.get_all_pages(limit=min(50, max_results * 3))
-            api_calls = len(await self._get_all_sections(token))  # Approximate API calls
-            
-            # Filter pages by content
-            query_lower = query.lower()
-            matching_pages = []
-            
-            for page in all_pages:
-                # Check title first (faster)
-                if query_lower in page.title.lower():
-                    matching_pages.append({
-                        "id": page.id,
-                        "title": page.title,
-                        "createdDateTime": page.created_date_time.isoformat() if page.created_date_time else None,
-                        "lastModifiedDateTime": page.last_modified_date_time.isoformat() if page.last_modified_date_time else None,
-                        "contentUrl": page.content_url,
-                        "parentSection": page.parent_section,
-                        "parentNotebook": page.parent_notebook
-                    })
-                # Then check content (slower)
-                elif page.text_content and query_lower in page.text_content.lower():
-                    matching_pages.append({
-                        "id": page.id,
-                        "title": page.title,
-                        "createdDateTime": page.created_date_time.isoformat() if page.created_date_time else None,
-                        "lastModifiedDateTime": page.last_modified_date_time.isoformat() if page.last_modified_date_time else None,
-                        "contentUrl": page.content_url,
-                        "parentSection": page.parent_section,
-                        "parentNotebook": page.parent_notebook
-                    })
-                    
-                if len(matching_pages) >= max_results:
-                    break
-                    
-            logger.info(f"Section-by-section content search found {len(matching_pages)} matching pages")
-            return matching_pages, api_calls
-            
-        except Exception as e:
-            logger.error(f"Section-by-section content search failed: {e}")
             return [], 0
 
     async def ensure_authenticated(self) -> bool:

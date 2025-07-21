@@ -44,7 +44,10 @@ class TestCacheAnalyzer:
             analyzer.cache_dir = temp_cache_dir
             analyzer.db_path = temp_cache_dir / "cache.db"
             analyzer.analytics_db_path = temp_cache_dir / "analytics.db"
-            return analyzer
+            yield analyzer
+            # Cleanup for Windows compatibility
+            import gc
+            gc.collect()
 
     @pytest.fixture
     def sample_cache_db(self, temp_cache_dir):

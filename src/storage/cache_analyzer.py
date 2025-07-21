@@ -512,3 +512,20 @@ class CacheAnalyzer:
                 json.dump(report_dict, f, indent=2, ensure_ascii=False)
         except Exception as e:
             raise RuntimeError(f"Failed to export report: {e}")
+
+    def cleanup(self) -> None:
+        """
+        Clean up any resources used by the analyzer.
+
+        This method ensures all database connections are properly closed
+        and any temporary resources are cleaned up.
+        """
+        # SQLite connections are managed by context managers in this class,
+        # but we can force garbage collection to help with Windows file locking
+        import gc
+        gc.collect()
+
+        # For Windows compatibility, we might want to explicitly close any
+        # potential lingering connections, but since we use context managers,
+        # there shouldn't be any persistent connections to close.
+        pass

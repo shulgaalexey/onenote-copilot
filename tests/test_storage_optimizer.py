@@ -1,7 +1,17 @@
 """
 Tests for Storage Optimizer System.
 
-Comprehensive test suite covering storage analysis, cleanup candidate identification,
+Comprehensive test suite covering storage analysis, c        for filename, content, days_old in assets:
+            file_path = assets_dir / filename
+            file_path.write_bytes(content)
+
+            # Set file modification time (Python 3.11 compatible)
+            old_time = datetime.now() - timedelta(days=days_old)
+            timestamp = old_time.timestamp()
+            import os
+            os.utime(file_path, (timestamp, timestamp))
+
+        return assets_dirdidate identification,
 optimization planning, and storage health assessment.
 """
 
@@ -45,7 +55,10 @@ class TestStorageOptimizer:
             optimizer.db_path = temp_cache_dir / "cache.db"
             optimizer.assets_dir = temp_cache_dir / "assets"
             optimizer.temp_dir = temp_cache_dir / "temp"
-            return optimizer
+            yield optimizer
+            # Cleanup for Windows compatibility
+            import gc
+            gc.collect()
 
     @pytest.fixture
     def sample_cache_db(self, temp_cache_dir):
@@ -99,10 +112,11 @@ class TestStorageOptimizer:
             file_path = assets_dir / filename
             file_path.write_bytes(content)
 
-            # Set file modification time
+            # Set file modification time (Python 3.11 compatible)
             old_time = datetime.now() - timedelta(days=days_old)
             timestamp = old_time.timestamp()
-            file_path.touch(times=(timestamp, timestamp))
+            import os
+            os.utime(file_path, (timestamp, timestamp))
 
         return assets_dir
 
@@ -123,10 +137,11 @@ class TestStorageOptimizer:
             file_path = temp_dir / filename
             file_path.write_bytes(content)
 
-            # Set file modification time
+            # Set file modification time (Python 3.11 compatible)
             old_time = datetime.now() - timedelta(days=days_old)
             timestamp = old_time.timestamp()
-            file_path.touch(times=(timestamp, timestamp))
+            import os
+            os.utime(file_path, (timestamp, timestamp))
 
         return temp_dir
 

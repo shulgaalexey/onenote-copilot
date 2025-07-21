@@ -46,7 +46,10 @@ class TestPerformanceMonitor:
             monitor = PerformanceMonitor()
             monitor.cache_dir = temp_cache_dir
             monitor.metrics_db_path = temp_cache_dir / "performance.db"
-            return monitor
+            yield monitor
+            # Cleanup for Windows compatibility
+            import gc
+            gc.collect()
 
     @pytest.fixture
     def sample_metrics_db(self, monitor):

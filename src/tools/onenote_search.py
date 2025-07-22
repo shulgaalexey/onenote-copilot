@@ -889,7 +889,7 @@ class OneNoteSearchTool:
                     retry_after = int(response.headers.get("Retry-After", 60))
                     logger.warning(f"Rate limit exceeded getting notebooks, waiting {retry_after} seconds")
                     await asyncio.sleep(retry_after)
-                    
+
                     # Retry once
                     response = await client.get(endpoint, headers=headers, params=params)
                     if response.status_code == 200:

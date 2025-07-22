@@ -96,7 +96,7 @@ async def cmd_init_cache() -> None:
 
         # Use bulk indexer for comprehensive content caching
         from ..storage.bulk_indexer import BulkContentIndexer
-        
+
         bulk_indexer = BulkContentIndexer(
             cache_root=settings.onenote_cache_full_path,
             content_fetcher=content_fetcher,
@@ -110,9 +110,9 @@ async def cmd_init_cache() -> None:
             transient=False,
         ) as progress:
             task = progress.add_task("Initializing cache...", total=None)
-            
+
             progress.update(task, description=f"Caching content from {len(notebooks)} notebooks...")
-            
+
             # Use bulk indexer for proper content caching
             indexing_result = await bulk_indexer.index_all_content(
                 notebooks=None,  # Index all content
@@ -125,10 +125,10 @@ async def cmd_init_cache() -> None:
             console.print("\n[green]Cache initialization completed successfully![/green]")
             console.print(f"[dim]• Pages cached: {indexing_result.total_pages}[/dim]")
             console.print(f"[dim]• Successfully processed: {indexing_result.successful_pages}[/dim]")
-            
+
             if indexing_result.failed_pages > 0:
                 console.print(f"[yellow]  {indexing_result.failed_pages} pages failed to process[/yellow]")
-                
+
             duration = indexing_result.get_elapsed_time()
             if duration:
                 duration_seconds = duration.total_seconds()

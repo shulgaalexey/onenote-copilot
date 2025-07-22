@@ -40,16 +40,16 @@ OneNote Copilot features a revolutionary local cache system that transforms your
 ### Cache Commands
 ```bash
 # Initialize the cache (first time setup)
-python -m src.main --init-cache
+python -m src.main cache --init
 
 # Check cache status and statistics
-python -m src.main --cache-status
+python -m src.main cache --status
 
 # Manually sync latest changes
-python -m src.main --sync-cache
+python -m src.main cache --sync
 
 # Clear and rebuild cache
-python -m src.main --rebuild-cache
+python -m src.main cache --rebuild
 ```
 
 ### Cache Management

@@ -113,8 +113,8 @@ class OneNoteContentFetcher:
                 title=page_data.get('title', 'Untitled'),
                 web_url=page_data.get('links', {}).get('oneNoteWebUrl', {}).get('href', ''),
                 last_modified_date_time=last_modified,
-                notebook_name=section.notebook_name,
-                section_name=section.display_name
+                notebook_name=section.get('notebook_name', 'Unknown Notebook'),
+                section_name=section.get('displayName', 'Unknown Section')
             )
             pages.append(page)
 
@@ -298,6 +298,15 @@ class OneNoteContentFetcher:
             logger.error(f"Failed to get notebooks: {e}")
             raise
 
+    async def get_all_notebooks(self) -> List[Dict]:
+        """
+        Public method to get all notebooks for the authenticated user.
+
+        Returns:
+            List of notebook dictionaries
+        """
+        return await self._get_all_notebooks()
+
     async def _get_all_sections(self, notebook_id: str) -> List[Dict]:
         """
         Get all sections for a notebook using OneNoteSearchTool.
@@ -328,6 +337,90 @@ class OneNoteContentFetcher:
         except Exception as e:
             logger.error(f"Failed to get sections for notebook {notebook_id}: {e}")
             raise
+
+    async def get_all_sections(self, notebook_id: str) -> List[Dict]:
+        """
+        Public method to get all sections for a notebook.
+
+        Args:
+            notebook_id: Notebook ID
+
+        Returns:
+            List of section dictionaries
+        """
+        return await self._get_all_sections(notebook_id)
+
+    async def get_pages_from_section(self, section_id: str) -> List[Dict]:
+        """
+        Public method to get all pages from a section.
+
+        Args:
+            section_id: Section ID
+
+        Returns:
+            List of page dictionaries
+        """
+        return await self._get_pages_from_section(section_id)
+
+    async def get_page_content(self, page_id: str) -> Dict:
+        """
+        Public method to get page content by ID.
+
+        Args:
+            page_id: Page ID
+
+        Returns:
+            Page dictionary with HTML content
+        """
+        if not self.onenote_search:
+            raise ValueError("OneNoteSearchTool instance not provided")
+
+        try:
+            # Get the access token from the OneNoteSearchTool's authenticator
+            token = await self.onenote_search.authenticator.get_access_token()
+
+            # Fetch the page content using OneNoteSearchTool
+            html_content, api_calls = await self.onenote_search._fetch_page_content(page_id, token)
+
+            if html_content:  # Check if we have actual content
+                # Return a dict that supports both dict and attribute access patterns
+                page_data = {
+                    "id": page_id,
+                    "title": "Untitled Page",  # We don't have title from content endpoint
+                    "htmlContent": html_content,
+                    "content": html_content,  # For OneNotePage model compatibility
+                    "createdDateTime": None,
+                    "lastModifiedDateTime": None,
+                    "contentUrl": None
+                }
+
+                # Add attribute access by creating a simple object wrapper
+                class PageWrapper(dict):
+                    def __getattr__(self, name):
+                        if name == 'html_content':
+                            return self.get('htmlContent', '')
+                        return self.get(name)
+
+                return PageWrapper(page_data)
+            else:
+                logger.warning(f"Failed to fetch page content for {page_id}, api_calls: {api_calls}")
+                return {
+                    "id": page_id,
+                    "title": "Untitled Page",
+                    "htmlContent": "",
+                    "content": "",
+                    "html_content": "",
+                }
+
+        except Exception as e:
+            logger.error(f"Error fetching page content for {page_id}: {e}")
+            return {
+                "id": page_id,
+                "title": "Error",
+                "htmlContent": "",
+                "content": "",
+                "html_content": "",
+            }
 
     async def _process_notebook(self, user_id: str, notebook: Dict,
                               sync_type: SyncType) -> Dict[str, any]:
@@ -464,7 +557,19 @@ class OneNoteContentFetcher:
                 token = await self.onenote_search.authenticator.get_valid_token()
 
                 # Get pages from section
-                pages = await self.onenote_search._get_pages_from_section(section_id, token)
+                onenote_pages = await self.onenote_search._get_pages_from_section(section_id, token)
+
+                # Convert OneNotePage objects to dictionaries for consistency
+                pages = []
+                for page in onenote_pages:
+                    pages.append({
+                        "id": page.id,
+                        "title": page.title,
+                        "lastModifiedDateTime": page.last_modified_date_time.isoformat() if page.last_modified_date_time else None,
+                        "createdDateTime": page.created_date_time.isoformat() if page.created_date_time else None,
+                        "contentUrl": page.content_url,
+                        "webUrl": page.web_url
+                    })
 
                 logger.debug(f"Retrieved {len(pages)} pages from section {section_id}")
                 return pages

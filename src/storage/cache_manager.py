@@ -13,15 +13,9 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from ..config.settings import Settings, get_settings
-from ..models.cache import (
-    CacheMetadata,
-    CacheStatistics,
-    CachedPage,
-    CachedPageMetadata,
-    CleanupResult,
-    PageMatch,
-    CacheSearchResult,
-)
+from ..models.cache import (CachedPage, CachedPageMetadata, CacheMetadata,
+                            CacheSearchResult, CacheStatistics, CleanupResult,
+                            PageMatch)
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +23,7 @@ logger = logging.getLogger(__name__)
 class OneNoteCacheManager:
     """
     Manages the local OneNote content cache.
-    
+
     Provides functionality for storing, retrieving, and managing cached OneNote
     content in a hierarchical directory structure that mirrors OneNote organization.
     """
@@ -44,7 +38,7 @@ class OneNoteCacheManager:
         """
         self.settings = settings or get_settings()
         self.cache_root = cache_root or self.settings.onenote_cache_full_path
-        
+
         logger.debug(f"Initializing OneNote cache manager with root: {self.cache_root}")
 
     def _get_user_cache_dir(self, user_id: str) -> Path:
@@ -115,16 +109,16 @@ class OneNoteCacheManager:
         """
         try:
             logger.info(f"Initializing cache structure for user: {user_id}")
-            
+
             user_cache_dir = self._get_user_cache_dir(user_id)
-            
+
             # Create main directory structure
             directories = [
                 user_cache_dir,
                 user_cache_dir / "notebooks",
                 user_cache_dir / "global",
             ]
-            
+
             for directory in directories:
                 directory.mkdir(parents=True, exist_ok=True)
                 logger.debug(f"Created directory: {directory}")
@@ -173,7 +167,7 @@ class OneNoteCacheManager:
             # Get notebook and section IDs from metadata
             notebook_id = page.metadata.parent_notebook.get("id")
             section_id = page.metadata.parent_section.get("id")
-            
+
             if not notebook_id or not section_id:
                 raise ValueError(f"Missing parent IDs for page {page.metadata.id}")
 
@@ -229,16 +223,16 @@ class OneNoteCacheManager:
         try:
             # Find page by searching through cache structure
             user_cache_dir = self._get_user_cache_dir(user_id)
-            
+
             # Search for the page in all notebooks/sections
             for notebook_dir in (user_cache_dir / "notebooks").glob("*"):
                 if not notebook_dir.is_dir():
                     continue
-                    
+
                 for section_dir in (notebook_dir / "sections").glob("*"):
                     if not section_dir.is_dir():
                         continue
-                    
+
                     page_dir = section_dir / "pages" / page_id
                     if page_dir.exists():
                         return await self._load_page_from_directory(page_dir)
@@ -320,10 +314,10 @@ class OneNoteCacheManager:
         """
         try:
             logger.debug(f"Searching cached pages for user {user_id}: '{query}'")
-            
+
             matches = []
             user_cache_dir = self._get_user_cache_dir(user_id)
-            
+
             if not user_cache_dir.exists():
                 logger.debug(f"User cache directory not found: {user_cache_dir}")
                 return matches
@@ -334,36 +328,93 @@ class OneNoteCacheManager:
             for notebook_dir in (user_cache_dir / "notebooks").glob("*"):
                 if not notebook_dir.is_dir():
                     continue
-                    
+
                 for section_dir in (notebook_dir / "sections").glob("*"):
                     if not section_dir.is_dir():
                         continue
-                    
+
                     for page_dir in (section_dir / "pages").glob("*"):
                         if not page_dir.is_dir():
                             continue
-                        
+
                         try:
                             page = await self._load_page_from_directory(page_dir)
-                            
+
                             # Check if query matches title or content
                             if (query_lower in page.metadata.title.lower() or
                                 (page.text_content and query_lower in page.text_content.lower()) or
                                 (page.markdown_content and query_lower in page.markdown_content.lower())):
                                 matches.append(page)
-                                
+
                         except Exception as e:
                             logger.warning(f"Failed to load page from {page_dir}: {e}")
                             continue
 
             # Sort by last modified date (most recent first)
             matches.sort(key=lambda p: p.metadata.last_modified_date_time, reverse=True)
-            
+
             logger.debug(f"Found {len(matches)} matching pages")
             return matches
 
         except Exception as e:
             logger.error(f"Failed to search cached pages: {e}")
+            return []
+
+    async def get_pages_by_section(self, user_id: str, section_id: str) -> List[CachedPage]:
+        """
+        Get all cached pages from a specific section.
+
+        Args:
+            user_id: User identifier
+            section_id: Section identifier
+
+        Returns:
+            List of cached pages in the section
+        """
+        try:
+            logger.debug(f"Getting pages for user {user_id} in section {section_id}")
+
+            pages = []
+            user_cache_dir = self._get_user_cache_dir(user_id)
+
+            if not user_cache_dir.exists():
+                logger.debug(f"User cache directory not found: {user_cache_dir}")
+                return pages
+
+            # Search through all notebooks to find the section
+            for notebook_dir in (user_cache_dir / "notebooks").glob("*"):
+                if not notebook_dir.is_dir():
+                    continue
+
+                section_dir = notebook_dir / "sections" / section_id
+                if not section_dir.exists():
+                    continue
+
+                # Found the section, load all pages
+                pages_dir = section_dir / "pages"
+                if not pages_dir.exists():
+                    continue
+
+                for page_dir in pages_dir.glob("*"):
+                    if not page_dir.is_dir():
+                        continue
+
+                    try:
+                        page = await self._load_page_from_directory(page_dir)
+                        pages.append(page)
+                        logger.debug(f"Loaded page {page.id} from section {section_id}")
+
+                    except Exception as e:
+                        logger.warning(f"Failed to load page from {page_dir}: {e}")
+                        continue
+
+                break  # Found the section, no need to search other notebooks
+
+            logger.debug(f"Found {len(pages)} pages in section {section_id}")
+            return pages
+
+        except Exception as e:
+            logger.error(f"Failed to get pages for section {section_id}: {e}")
             return []
 
     async def get_cache_statistics(self, user_id: str) -> CacheStatistics:
@@ -378,9 +429,9 @@ class OneNoteCacheManager:
         """
         try:
             user_cache_dir = self._get_user_cache_dir(user_id)
-            
+
             stats = CacheStatistics(user_id=user_id)
-            
+
             if not user_cache_dir.exists():
                 return stats
 
@@ -391,27 +442,27 @@ class OneNoteCacheManager:
                     if not notebook_dir.is_dir():
                         continue
                     stats.total_notebooks += 1
-                    
+
                     sections_dir = notebook_dir / "sections"
                     if sections_dir.exists():
                         for section_dir in sections_dir.glob("*"):
                             if not section_dir.is_dir():
                                 continue
                             stats.total_sections += 1
-                            
+
                             pages_dir = section_dir / "pages"
                             if pages_dir.exists():
                                 for page_dir in pages_dir.glob("*"):
                                     if page_dir.is_dir():
                                         stats.total_pages += 1
-                                        
+
                                         # Count assets
                                         attachments_dir = page_dir / "attachments"
                                         if attachments_dir.exists():
                                             images_dir = attachments_dir / "images"
                                             if images_dir.exists():
                                                 stats.total_images += len(list(images_dir.glob("*")))
-                                            
+
                                             files_dir = attachments_dir / "files"
                                             if files_dir.exists():
                                                 stats.total_files += len(list(files_dir.glob("*")))
@@ -467,40 +518,40 @@ class OneNoteCacheManager:
         """
         start_time = datetime.utcnow()
         result = CleanupResult()
-        
+
         try:
             logger.info(f"Starting orphaned asset cleanup for user: {user_id}")
-            
+
             user_cache_dir = self._get_user_cache_dir(user_id)
             if not user_cache_dir.exists():
                 return result
 
             # Collect all asset references from pages
             referenced_assets = set()
-            
+
             for notebook_dir in (user_cache_dir / "notebooks").glob("*"):
                 if not notebook_dir.is_dir():
                     continue
-                    
+
                 for section_dir in (notebook_dir / "sections").glob("*"):
                     if not section_dir.is_dir():
                         continue
-                    
+
                     for page_dir in (section_dir / "pages").glob("*"):
                         if not page_dir.is_dir():
                             continue
-                        
+
                         try:
                             metadata_file = page_dir / "metadata.json"
                             if metadata_file.exists():
                                 with open(metadata_file, 'r', encoding='utf-8') as f:
                                     metadata = json.load(f)
-                                    
+
                                 # Collect asset paths from metadata
                                 for attachment in metadata.get('attachments', []):
                                     if 'local_path' in attachment:
                                         referenced_assets.add(Path(attachment['local_path']))
-                                        
+
                         except Exception as e:
                             logger.warning(f"Failed to process page {page_dir}: {e}")
                             continue
@@ -509,19 +560,19 @@ class OneNoteCacheManager:
             for notebook_dir in (user_cache_dir / "notebooks").glob("*"):
                 if not notebook_dir.is_dir():
                     continue
-                    
+
                 for section_dir in (notebook_dir / "sections").glob("*"):
                     if not section_dir.is_dir():
                         continue
-                    
+
                     for page_dir in (section_dir / "pages").glob("*"):
                         if not page_dir.is_dir():
                             continue
-                        
+
                         attachments_dir = page_dir / "attachments"
                         if not attachments_dir.exists():
                             continue
-                        
+
                         # Check all asset files
                         for asset_file in attachments_dir.rglob("*"):
                             if asset_file.is_file() and asset_file not in referenced_assets:
@@ -537,10 +588,10 @@ class OneNoteCacheManager:
 
             end_time = datetime.utcnow()
             result.cleanup_time_seconds = (end_time - start_time).total_seconds()
-            
+
             logger.info(f"Cleanup completed: removed {result.orphaned_assets_removed} assets, "
                        f"freed {result.space_freed_mb:.1f}MB")
-            
+
             return result
 
         except Exception as e:
@@ -559,12 +610,12 @@ class OneNoteCacheManager:
         try:
             user_cache_dir = self._get_user_cache_dir(user_id)
             metadata_file = user_cache_dir / "cache_metadata.json"
-            
+
             with open(metadata_file, 'w', encoding='utf-8') as f:
                 json.dump(metadata.model_dump(), f, indent=2, default=str)
-                
+
             logger.debug(f"Saved cache metadata for user: {user_id}")
-            
+
         except Exception as e:
             logger.error(f"Failed to save cache metadata: {e}")
             raise
@@ -582,14 +633,14 @@ class OneNoteCacheManager:
         try:
             user_cache_dir = self._get_user_cache_dir(user_id)
             metadata_file = user_cache_dir / "cache_metadata.json"
-            
+
             if not metadata_file.exists():
                 return None
-                
+
             with open(metadata_file, 'r', encoding='utf-8') as f:
                 metadata_dict = json.load(f)
                 return CacheMetadata(**metadata_dict)
-                
+
         except Exception as e:
             logger.error(f"Failed to load cache metadata: {e}")
             return None
@@ -617,7 +668,7 @@ class OneNoteCacheManager:
                     setattr(metadata, key, value)
 
             await self._save_cache_metadata(user_id, metadata)
-            
+
         except Exception as e:
             logger.error(f"Failed to update cache metadata: {e}")
             raise
@@ -634,7 +685,7 @@ class OneNoteCacheManager:
         """
         try:
             user_cache_dir = self._get_user_cache_dir(user_id)
-            
+
             if user_cache_dir.exists():
                 shutil.rmtree(user_cache_dir)
                 logger.info(f"Deleted cache for user: {user_id}")
@@ -642,7 +693,7 @@ class OneNoteCacheManager:
             else:
                 logger.debug(f"Cache directory doesn't exist for user: {user_id}")
                 return True
-                
+
         except Exception as e:
             logger.error(f"Failed to delete cache for user {user_id}: {e}")
             return False

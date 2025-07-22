@@ -142,17 +142,17 @@ async def authenticate_only() -> bool:
 
         if token:
             logger.info("✅ Authentication successful, token cached")
-            console.print("[green]✅ Authentication successful![/green]")
+            console.print("[green]Authentication successful![/green]")
             console.print(f"🎫 Token cached to: {settings.token_cache_file}")
             return True
         else:
             logger.warning("❌ Authentication failed - no token received")
-            console.print("[red]❌ Authentication failed.[/red]")
+            console.print("[red]Authentication failed.[/red]")
             return False
 
     except Exception as e:
         logger.error(f"❌ Authentication error: {e}", exc_info=True)
-        console.print(f"[red]❌ Authentication error: {e}[/red]")
+        console.print(f"[red]Authentication error: {e}[/red]")
         return False
 
 
@@ -185,11 +185,11 @@ def check_dependencies() -> bool:
             missing_deps.append(dep_name)
 
     if missing_deps:
-        console.print("[red]❌ Missing required dependencies:[/red]")
+        console.print("[red]Missing required dependencies:[/red]")
         for dep in missing_deps:
             console.print(f"   - {dep}")
         console.print()
-        console.print("[yellow]💡 Install dependencies with:[/yellow]")
+        console.print("[yellow]Install dependencies with:[/yellow]")
         console.print(f"   [cyan]pip install {' '.join(missing_deps)}[/cyan]")
         console.print("   [cyan]# OR[/cyan]")
         console.print("   [cyan]pip install -r requirements.txt[/cyan]")
@@ -250,7 +250,7 @@ def main(
         return
 
     # Early startup indicator
-    console.print("[dim]🚀 Starting OneNote Copilot...[/dim]")
+    console.print("[dim]Starting OneNote Copilot...[/dim]")
 
     # Setup comprehensive logging system early
     settings = get_settings()
@@ -292,7 +292,7 @@ def main(
 
         # Start the main application
         try:
-            console.print("[bold blue]🚀 Starting OneNote Copilot...[/bold blue]")
+            console.print("[bold blue]Starting OneNote Copilot...[/bold blue]")
 
             # Run the CLI interface
             logger.info("🎯 Starting main application interface...")
@@ -307,7 +307,7 @@ def main(
                 console.print_exception()
             else:
                 console.print(f"[red]X Failed to start OneNote Copilot: {e}[/red]")
-                console.print("[dim]💡 Use --debug flag for detailed error information[/dim]")
+                console.print("[dim]Use --debug flag for detailed error information[/dim]")
             raise typer.Exit(1)
 
 
@@ -638,6 +638,86 @@ def logout(
         logger = get_logger(__name__)
         logger.error(f"Logout command failed: {e}")
         console.print(f"[red]❌ Logout failed: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def cache(
+    init: bool = typer.Option(
+        False,
+        "--init",
+        help="🚀 Initialize the cache (first time setup)"
+    ),
+    status: bool = typer.Option(
+        False,
+        "--status",
+        help="📊 Check cache status and statistics"
+    ),
+    sync: bool = typer.Option(
+        False,
+        "--sync",
+        help="🔄 Manually sync latest changes"
+    ),
+    rebuild: bool = typer.Option(
+        False,
+        "--rebuild",
+        help="🔄 Clear and rebuild cache"
+    )
+) -> None:
+    """
+    🗄️ Manage OneNote local cache system.
+
+    The local cache system provides lightning-fast search by storing your OneNote
+    content locally. This eliminates API rate limits and provides sub-500ms search times.
+
+    **Cache Operations:**
+    - **Initialize** (--init): First-time cache setup, downloads all content
+    - **Status** (--status): Show cache statistics and health information
+    - **Sync** (--sync): Update cache with recent changes from OneNote
+    - **Rebuild** (--rebuild): Clear and rebuild entire cache from scratch
+
+    **Examples:**
+    - Initialize cache: `onenote-copilot cache --init`
+    - Check status: `onenote-copilot cache --status`
+    - Sync changes: `onenote-copilot cache --sync`
+    - Rebuild cache: `onenote-copilot cache --rebuild`
+
+    **Cache Benefits:**
+    - ⚡ 10x faster search (sub-500ms vs 5-15+ seconds)
+    - 🔍 Full-text search across all content
+    - 📱 Offline search capability
+    - 🚫 No API rate limiting issues
+    """
+    try:
+        # Lazy import of cache commands
+        from .commands.cache import (cmd_cache_status, cmd_init_cache,
+                                     cmd_rebuild_cache, cmd_sync_cache)
+
+        if init:
+            # Initialize cache
+            asyncio.run(cmd_init_cache())
+        elif status:
+            # Show cache status
+            asyncio.run(cmd_cache_status())
+        elif sync:
+            # Sync cache
+            asyncio.run(cmd_sync_cache())
+        elif rebuild:
+            # Rebuild cache
+            asyncio.run(cmd_rebuild_cache())
+        else:
+            # Default to showing status if no specific action requested
+            console.print("[blue]ℹ️  No cache operation specified. Showing current status:[/blue]")
+            asyncio.run(cmd_cache_status())
+            console.print("\n[dim]💡 Use --init for first-time setup, --sync for updates, or --status for information[/dim]")
+
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⏹️  Cache operation cancelled by user[/yellow]")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger = get_logger(__name__)
+        logger.error(f"Cache command failed: {e}")
+        console.print(f"[red]❌ Cache operation failed: {e}[/red]")
         raise typer.Exit(1)
 
 

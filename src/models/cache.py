@@ -227,6 +227,21 @@ class CachedPage(BaseModel):
         """Get last modified date."""
         return self.metadata.last_modified_date_time
 
+    @property
+    def notebook_name(self) -> str:
+        """Get notebook name for backward compatibility."""
+        return self.metadata.parent_notebook.get("displayName", "Unknown Notebook")
+
+    @property
+    def section_name(self) -> str:
+        """Get section name for backward compatibility."""
+        return self.metadata.parent_section.get("displayName", "Unknown Section")
+
+    @property
+    def html_content(self) -> Optional[str]:
+        """Get HTML content for backward compatibility."""
+        return self.content
+
     def to_onenote_page(self) -> OneNotePage:
         """Convert to OneNotePage model for compatibility."""
         return OneNotePage(
